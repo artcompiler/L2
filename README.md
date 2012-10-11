@@ -15,9 +15,12 @@ Features include:
 
 ## Sample Code ##
 
-> def fib n. if n less than two then ret n. print n. fib n minus one plus fib n minus two.
+~~~
+   fun fib n. if n is less than two then n else print n. fib n minus one, plus fib 
+   n minus two.. fun flash lights. blink 100 on off off. blink 100 off on off. 
+   blink 100 off off on.. fun start. fib ten. flash lights..
+~~~
 
-> def start. fib ten.
 
 ## Syntax ##
 
