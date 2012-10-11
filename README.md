@@ -16,11 +16,20 @@ Features include:
 ## Sample Code ##
 
 ~~~
-   fun fib n. if n is less than two then n else print n. fib n minus one, plus fib 
-   n minus two.. fun flash lights. blink 100 on off off. blink 100 off on off. 
-   blink 100 off off on.. fun start. fib ten. flash lights..
+fun fib n = if n is less than two then n else print n. fib n minus one, plus fib 
+n minus two.. fun flash lights = blink 100 on off off. blink 100 off on off. 
+blink 100 off off on.. fun start = fib ten. flash lights..
 ~~~
 
+~~~
+fun foo n =
+    if n is zero then n.
+    else print n. foo n minus one.
+    .
+~~~
+
+NOTE: '.' terminates an expression or phrase. Two consecutive '.' terminates the current function 
+definition. ',' terminates a sub-expression, which useful for resolving parsing ambiguities.
 
 ## Syntax ##
 
@@ -32,15 +41,16 @@ defns
     defns defn
     
 defn
-    'def' sig '.' stmts
+    'fun' ident pattern '=' expr
+    'val' ident '=' expr '.'
 
-stmt
-    'val' ident 'is' expr '.'
+expr
     'if' ... 'then' ... 'else' ... '.'
     'if' ... 'then' ... '.'
     callStmt '.'
 
 oper
+    'is'
     'equal to'
     'less than'
     'greater than'
@@ -51,7 +61,7 @@ oper
     '>'
     '<='
     '>='
-    
+    '.'    
 ~~~~
 
     
