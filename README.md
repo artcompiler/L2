@@ -16,12 +16,6 @@ Features include:
 ## Sample Code ##
 
 ~~~
-fun fib n = if n is less than two then n else print n. fib n minus one, plus fib 
-    n minus two.. fun flash lights = blink 100 on off off. blink 100 off on off. 
-    blink 100 off off on.. fun start = fib ten. flash lights..
-~~~
-
-~~~
 fun foo n =
     if n is zero then n.
     else print n. foo n minus one..
@@ -32,8 +26,10 @@ fun dance n = if n is zero then n else forward two seconds. spin right ninety de
     backward two seconds. spin right ninety degrees. forward two seconds. spin left
     ninety degrees. forward two seconds. spin left ninety degrees. dance n minus one..
 
-fun start = dance ten..
+fun flash lights = blink 100 on off off. blink 100 off on off. 
+    blink 100 off off on.. 
 
+fun start = dance ten. flash lights..
 ~~~
 
 NOTE: '.' terminates an expression. ',' terminates a sub-expression, which useful for resolving
