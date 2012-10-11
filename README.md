@@ -26,8 +26,7 @@ fun dance n = if n is zero then n else forward two seconds. spin right ninety de
     backward two seconds. spin right ninety degrees. forward two seconds. spin left
     ninety degrees. forward two seconds. spin left ninety degrees. dance n minus one..
 
-fun flash lights = blink 100 on off off. blink 100 off on off. 
-    blink 100 off off on.. 
+fun flash lights = blink 100 on off off. blink 100 off on off. blink 100 off off on.. 
 
 fun start = dance ten. flash lights..
 ~~~
