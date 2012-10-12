@@ -56,11 +56,9 @@ CodeMirror.defineMode("graffiti", function() {
 	"backward" : { tk: TK_IDENT, cls: "method", length: 1 },
 	"stop" : { tk: TK_IDENT, cls: "method", length: 1 },
 	"spin" : { tk: TK_IDENT, cls: "method", length: 1 },
-	"forwardLeft" : { tk: TK_IDENT, cls: "method", length: 1 },
-	"forwardRight" : { tk: TK_IDENT, cls: "method", length: 1 },
 	"play" : { tk: TK_NUM, cls: "number", length: 0 },
 	"slow" : { tk: TK_NUM, cls: "number", length: 0 },
-	"seconds" : { tk: TK_POSTOP, cls: "keyword", length: 0 },
+	"seconds" : { tk: TK_POSTOP, cls: "operator", length: 0 },
 	"ms" : { tk: TK_POSTOP, cls: "operator", length: 0 },
 	"not" : { tk: TK_PREOP, cls: "operator", length: 0 },
 	"minus" : { tk: TK_BINOP, cls: "operator", length: 0 },
@@ -73,6 +71,10 @@ CodeMirror.defineMode("graffiti", function() {
 	"none" : { tk: TK_IDENT, cls: "val", length: 0 },
 	"high" : { tk: TK_IDENT, cls: "val", length: 0 },
 	"low" : { tk: TK_IDENT, cls: "val", length: 0 },
+	"on" : { tk: TK_IDENT, cls: "val", length: 0 },
+	"off" : { tk: TK_IDENT, cls: "val", length: 0 },
+	"delay" : { tk: TK_IDENT, cls: "method", length: 1 },
+	"random" : { tk: TK_IDENT, cls: "method", length: 2 },
     }
 
     function findWord(ctx, lexeme) {
@@ -220,10 +222,6 @@ CodeMirror.defineMode("graffiti", function() {
 	    finishArgs(ctx)
 	    return cc
 	}
-//        return arg(ctx, function (ctx) {
-//            return args(ctx, cc)
-//        })
-
         return function (ctx) {
 	    var ret = arg(ctx, function (ctx) {
 		return args(ctx, cc)
