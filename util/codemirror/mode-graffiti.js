@@ -7,14 +7,14 @@ CodeMirror.defineMode("graffiti", function() {
     }
 
     function print(str) {
-	console.log(str)
+	//console.log(str)
     }
 
 
     var TK_IDENT  = 0x01
     var TK_NUM    = 0x02
     var TK_DOT    = 0x03
-    var TK_ON     = 0x04
+    var TK_EQUAL  = 0x04
     var TK_IF     = 0x05
     var TK_THEN   = 0x06
     var TK_ELSE   = 0x07
@@ -22,17 +22,18 @@ CodeMirror.defineMode("graffiti", function() {
     var TK_IS     = 0x09
     var TK_POSTOP = 0x0A
     var TK_PREOP  = 0x0B
+    var TK_FUN    = 0x0C
+    var TK_VAL    = 0x0D
+    var TK_BINOP  = 0x0E
 
-    var lexicon = {
-        "on" : { tk: TK_ON, cls: "keyword" },
-        "fun" : { tk: TK_ON, cls: "keyword" },
+    var globalLexicon = {
+        "fun" : { tk: TK_FUN, cls: "keyword" },
+        "val" : { tk: TK_VAL, cls: "keyword" },
         "if" : { tk: TK_IF, cls: "keyword" },
         "then" : { tk: TK_THEN, cls: "keyword" },
         "else" : { tk: TK_ELSE, cls: "keyword" },
-        "return" : { tk: TK_RETURN, cls: "keyword" },
-	"draw" : { tk: TK_IDENT, cls: "method", length: 5 },
-	"triangle" : { tk: TK_IDENT, cls: "method", length: 3 },
-	"setup" : { tk: TK_IDENT, cls: "handler", length: 0 },
+	"is" : { tk: TK_IS, cls: "keyword", length: 0 },
+
 	"zero" : { tk: TK_NUM, cls: "number", length: 0 },
 	"one" : { tk: TK_NUM, cls: "number", length: 0 },
 	"two" : { tk: TK_NUM, cls: "number", length: 0 },
@@ -44,31 +45,68 @@ CodeMirror.defineMode("graffiti", function() {
 	"eight" : { tk: TK_NUM, cls: "number", length: 0 },
 	"nine" : { tk: TK_NUM, cls: "number", length: 0 },
 	"ten" : { tk: TK_NUM, cls: "number", length: 0 },
-	"is" : { tk: TK_IS, cls: "keyword", length: 0 },
+
+	"print" : { tk: TK_IDENT, cls: "method", length: 1 },
+
+
 	// bitzee
 	"start" : { tk: TK_IDENT, cls: "handler", length: 0 },
-	"irRecv" : { tk: TK_IDENT, cls: "handler", length: 1 },
+	"remote" : { tk: TK_IDENT, cls: "handler", length: 1 },
 	"forward" : { tk: TK_IDENT, cls: "method", length: 1 },
 	"backward" : { tk: TK_IDENT, cls: "method", length: 1 },
+	"stop" : { tk: TK_IDENT, cls: "method", length: 1 },
 	"spin" : { tk: TK_IDENT, cls: "method", length: 1 },
 	"forwardLeft" : { tk: TK_IDENT, cls: "method", length: 1 },
 	"forwardRight" : { tk: TK_IDENT, cls: "method", length: 1 },
 	"play" : { tk: TK_NUM, cls: "number", length: 0 },
 	"slow" : { tk: TK_NUM, cls: "number", length: 0 },
 	"seconds" : { tk: TK_POSTOP, cls: "keyword", length: 0 },
-	"ms" : { tk: TK_POSTOP, cls: "keyword", length: 0 },
-	"not" : { tk: TK_PREOP, cls: "keyword", length: 0 },
-	"lightsOn" : { tk: TK_IDENT, cls: "method", length: 4 },
-	"ir" : { tk: TK_IDENT, cls: "handler", length: 2 },
-	"recv" : { tk: TK_IDENT, cls: "number", length: 0 },
+	"ms" : { tk: TK_POSTOP, cls: "operator", length: 0 },
+	"not" : { tk: TK_PREOP, cls: "operator", length: 0 },
+	"minus" : { tk: TK_BINOP, cls: "operator", length: 0 },
+	"blink" : { tk: TK_IDENT, cls: "method", length: 4 },
+	"left" : { tk: TK_IDENT, cls: "val", length: 0 },
+	"right" : { tk: TK_IDENT, cls: "val", length: 0 },
+	"speed" : { tk: TK_IDENT, cls: "method", length: 1 },
+	"full" : { tk: TK_IDENT, cls: "val", length: 0 },
+	"half" : { tk: TK_IDENT, cls: "val", length: 0 },
+	"none" : { tk: TK_IDENT, cls: "val", length: 0 },
+	"high" : { tk: TK_IDENT, cls: "val", length: 0 },
+	"low" : { tk: TK_IDENT, cls: "val", length: 0 },
     }
+
+    function findWord(ctx, lexeme) {
+	print("findWord() lexeme=" + lexeme)
+	for (var i = ctx.state.env.length-1; i >= 0; i--) {
+	    var word = ctx.state.env[i].lexicon[lexeme]
+	    if (word) {
+		return word
+	    }
+	}
+	return null
+    }
+
+    function addWord(ctx, lexeme, entry) {
+	print("addWord() lexeme=" + lexeme)
+	topEnv(ctx).lexicon[lexeme] = entry
+	return null
+    }
+
+    function enterFun(ctx, name) {
+	ctx.state.env.push({name: name, lexicon: []})
+    }
+
+    function exitFun(ctx) {
+	ctx.state.env.pop()
+    }
+
 
     function eat(ctx, tk) {
         if (next(ctx) !== tk) {
             throw "syntax error"
 	}
 	print("eat() lexeme="+lexeme)
-	return lexicon[lexeme]
+	return findWord(ctx, lexeme)
     }
     
     function match(ctx, tk) {
@@ -107,10 +145,13 @@ CodeMirror.defineMode("graffiti", function() {
 
     function name(ctx, cc) {
 	print("name()")
-        var tk = eat(ctx, TK_IDENT)
-	if (tk) {
-	    print(tk.cls)
-            cc.cls = tk.cls
+        eat(ctx, TK_IDENT)
+	var word = findWord(ctx, lexeme)
+	if (word) {
+            cc.cls = word.cls
+	}
+	else {
+	    cc.cls = "comment"
 	}
 	assert(cc, "name")
         return cc
@@ -127,7 +168,7 @@ CodeMirror.defineMode("graffiti", function() {
     function callExpr(ctx, cc) {
 	print("callExpr()")
 	return primaryExpr(ctx, function (ctx) {
-	    var tk = lexicon[lexeme]
+	    var tk = findWord(ctx, lexeme)
 	    if (tk && tk.cls === "method") {
 		startArgs(ctx, tk.length)
 		if (ctx.state.argc === 0) {
@@ -148,7 +189,7 @@ CodeMirror.defineMode("graffiti", function() {
 	    print("looking for 'seconds'")
 	    if (match(ctx, TK_POSTOP)) {
 		eat(ctx, TK_POSTOP)
-		cc.cls = "keyword"
+		cc.cls = "operator"
 	    }
 	    return cc
 	})
@@ -179,9 +220,17 @@ CodeMirror.defineMode("graffiti", function() {
 	    finishArgs(ctx)
 	    return cc
 	}
-        return arg(ctx, function (ctx) {
-            return args(ctx, cc)
-        })
+//        return arg(ctx, function (ctx) {
+//            return args(ctx, cc)
+//        })
+
+        return function (ctx) {
+	    var ret = arg(ctx, function (ctx) {
+		return args(ctx, cc)
+	    })
+	    ret.cls = "val"
+            return ret
+        }
     }
 
     function arg(ctx, cc) {
@@ -190,15 +239,30 @@ CodeMirror.defineMode("graffiti", function() {
 	return isExpr(ctx, cc)
     }
 
+    function binaryExpr(ctx, cc) {
+	print("binaryExpr()")
+	return prefixExpr(ctx, function (ctx) {
+	    if (match(ctx, TK_BINOP)) {
+		eat(ctx, TK_BINOP)
+		var ret = function (ctx) {
+		    return binaryExpr(ctx, cc)
+		}
+		ret.cls = "operator"
+		return ret
+	    }
+	    return cc
+	})
+    }
+    
     function isExpr(ctx, cc) {
 	print("isExpr()")
-	return prefixExpr(ctx, function (ctx) {
+	return binaryExpr(ctx, function (ctx) {
 	    if (match(ctx, TK_IS)) {
 		eat(ctx, TK_IS)
 		var ret = function (ctx) {
 		    return isExpr(ctx, cc)
 		}
-		ret.cls = "keyword"
+		ret.cls = "operator"
 		return ret
 	    }
 	    return cc
@@ -212,7 +276,9 @@ CodeMirror.defineMode("graffiti", function() {
 
     function stmts(ctx, cc) {
 	print("stmts()")
-	if (match(ctx, TK_ON)) {
+	if (match(ctx, TK_DOT)) {
+	    eat(ctx, TK_DOT)
+	    cc.cls = "punc"
 	    return cc
 	}
         return stmt(ctx, function (ctx) {
@@ -229,6 +295,10 @@ CodeMirror.defineMode("graffiti", function() {
 	if (match(ctx, TK_RETURN)) {
 	    return returnStmt(ctx, cc)
 	}
+	else
+        if (match(ctx, TK_VAL)) {
+	    return valDefn(ctx, cc)
+        }
 	else {
 	    return exprStmt(ctx, cc)
 	}
@@ -306,34 +376,85 @@ CodeMirror.defineMode("graffiti", function() {
 
     function def(ctx, cc) {
 	print("def()")
-        eat(ctx, TK_ON)
-         var ret = function (ctx) {
-            return name(ctx, function (ctx) {
-                return params(ctx, function (ctx) {
-		    return stmts(ctx, cc)
+	if (match(ctx, TK_FUN)) {
+            eat(ctx, TK_FUN)
+            var ret = function (ctx) {
+		var ret = name(ctx, function (ctx) {
+		    addWord(ctx, lexeme, { tk: TK_IDENT, cls: "method", length: 0 })
+		    ctx.state.argc = 0
+		    enterFun(ctx, lexeme)
+                    return params(ctx, function (ctx) {
+			print("def/params() argc="+ctx.state.argc)
+			findWord(ctx, topEnv(ctx).name).length = ctx.state.argc
+			return stmts(ctx, function (ctx) {
+			    exitFun(ctx)
+			    return cc
+			})
+		    })
 		})
-            })
+		ret.cls = "handler"
+		return ret
+            }
+            ret.cls = "keyword"
+	    return ret
+	}
+	else
+	if (match(ctx, TK_VAL)) {
+	    return valDefn(ctx, cc)
+	}
+        return name(ctx, cc)
+    }
+
+    function valDefn(ctx, cc) {
+        eat(ctx, TK_VAL)
+        var ret = function (ctx) {
+	    var ret = name(ctx, function (ctx) {
+		addWord(ctx, lexeme, { tk: TK_IDENT, cls: "val", length: 0 })
+		eat(ctx, TK_EQUAL)
+                var ret = function (ctx) {
+		    return expr(ctx, function (ctx) {
+			eat(ctx, TK_DOT)
+			var ret = function (ctx) {
+			    return cc
+			}
+			ret.cls = "punc"
+			return ret
+		    })
+		}
+		ret.cls = "punc"
+		return ret
+	    })
+	    ret.cls = "handler"
+	    return ret
         }
         ret.cls = "keyword"
-        return ret
+	return ret
     }
 
     function params(ctx, cc) {
 	print("params()")
-        if (match(ctx, TK_DOT)) {
-	    eat(ctx, TK_DOT)
+        if (match(ctx, TK_EQUAL)) {
+	    eat(ctx, TK_EQUAL)
             cc.cls = "punc"
             return cc
         }
-        return param(ctx, function (ctx) {
-            return params(ctx, cc)
-        })
-        return ret
+        return function (ctx) {
+	    var ret = primaryExpr(ctx, function (ctx) {
+		ctx.state.argc++
+		print("params/param() lexeme="+lexeme)
+		addWord(ctx, lexeme, { tk: TK_IDENT, cls: "val" })
+		return params(ctx, cc)
+	    })
+	    ret.cls = "val"
+            return ret
+        }
     }
 
     function param(ctx, cc) {
 	print("param()")
-        return primaryExpr(ctx, cc)
+        return primaryExpr(ctx, function (ctx) {
+	    return cc
+	})
     }
 
 
@@ -348,9 +469,14 @@ CodeMirror.defineMode("graffiti", function() {
             return {
                 cc: program,   // top level parsing function
 		argc: 0,
-		argcStack: [0]
+		argcStack: [0],
+		env: [ {name: "global", lexicon: globalLexicon } ]
             }
         }
+    }
+
+    function topEnv(ctx) {
+	return ctx.state.env[ctx.state.env.length-1]
     }
 
     function parse(stream, state) {
@@ -367,8 +493,10 @@ CodeMirror.defineMode("graffiti", function() {
             }
 	    else {
 		alert(x)
+		throw x
 		next(ctx)
 		cls = "comment"
+		
             }
         }
 	print("parse() cls="+cls)
@@ -408,9 +536,15 @@ CodeMirror.defineMode("graffiti", function() {
 		case ')'.charCodeAt(0):
 		    c = ' '
                     continue
+                case 45:  // dash
+                    lexeme += String.fromCharCode(c);
+                    return TK_MINUS
                 case 46:  // dot
                     lexeme += String.fromCharCode(c);
                     return TK_DOT
+                case 61:  // equal
+                    lexeme += String.fromCharCode(c);
+                    return TK_EQUAL
                 case 92:  // backslash
                     lexeme += String.fromCharCode(c);
                     return latex();
@@ -419,9 +553,7 @@ CodeMirror.defineMode("graffiti", function() {
                 case 42:  // asterisk
                 case 43:  // plus
                 case 44:  // comma
-                case 45:  // dash
                 case 47:  // slash
-                case 61:  // equal
                 case 91:  // left bracket
                 case 93:  // right bracket
                 case 94:  // caret
@@ -475,124 +607,15 @@ CodeMirror.defineMode("graffiti", function() {
             }  // otherwise, we are at the end of stream
 
 	    print("ident() lexeme="+lexeme)
-            var entry = lexicon[lexeme]
             var tk = TK_IDENT
-            if (entry) {
-                tk = entry.tk
-            }
+	    if (globalLexicon[lexeme]) {
+		tk = globalLexicon[lexeme].tk
+	    }
             return tk;
-        }
-        
+	}
     }
-
 })
 
 CodeMirror.defineMIME("text", "graffiti")
 
 
-/*
-
-    function exponentialExpr(ctx, cc) {
-	var expr = unaryExpr(ctx, cc);
-	var t;
-	while ((t=next(hd())===TK_CARET) {
-	    next();
-	    var expr2 = unaryExpr();
-	    if (expr2===1) {
-		expr = expr;
-	    }
-	    else if (expr2===0) {
-		expr = 1;
-	    }
-	    else {
-		expr = {op: tokenToOperator[t], args: [expr, expr2]};
-	    }
-	}
-	
-	return expr;
-    }
-    
-    function multiplicativeExpr() {
-	var expr = exponentialExpr();
-	var t;
-	
-	while((t=hd())===TK_VAR || t===TK_LEFTPAREN) {
-	    var expr2 = exponentialExpr();
-	    if (expr2 === 1) {
-		expr = expr;
-	    }
-	    else if (expr === 1) {
-		expr = expr2;
-	    }
-	    else {
-		expr = {op: OpStr.MUL, args: [expr, expr2]};
-	    }
-	}
-	
-	while (isMultiplicative(t = hd())) {
-	    next();
-	    var expr2 = exponentialExpr();
-	    if (expr2===1) {
-		expr = expr;
-	    }
-	    else if (t===TK_MUL && expr===1) {
-		expr = expr2;
-	    }
-	    else {
-		expr = {op: tokenToOperator[t], args: [expr, expr2]};
-	    }
-	}
-	return expr;
-	
-	function isMultiplicative(t) {
-	    return t===TK_MUL || t===TK_DIV;
-	}
-    }
-    
-    function isNeg(n) {
-	if (jQuery.type(n)==="number") {
-	    return n < 0;
-	}
-	else if (n.args.length===1) {
-	    return n.op===OpStr.SUB && n.args[0] > 0;  // is unary minus
-	}
-	else if (n.args.length===2) {
-	    return n.op===OpStr.MUL && isNeg(n.args[0]);  // leading term is neg
-	}
-    }
-    
-    function negate(n) {
-	if (jQuery.type(n)==="number") {
-	    return -n;
-	}
-	else if (n.args.length===1 && n.op===OpStr.SUB) {
-	    return n.args[0];  // strip the unary minus
-	}
-	else if (n.args.length===2 && n.op===OpStr.MUL && isNeg(n.args[0])) {
-	    return {op: n.op, args: [negate(n.args[0]), n.args[1]]};
-	}
-	assert(false);
-	return n;
-	
-    }
-    
-    function additiveExpr() {
-	var expr = multiplicativeExpr();
-	var t;
-	while (isAdditive(t = hd())) {
-	    next();
-	    var expr2 = multiplicativeExpr();
-	    if (t===TK_ADD && isNeg(expr2)) {
-		t = TK_SUB;
-		expr2 = negate(expr2);
-	    }
-	    expr = {op: tokenToOperator[t], args: [expr, expr2]};
-	}
-	return expr;
-	
-	function isAdditive(t) {
-	    return t===TK_ADD || t===TK_SUB || t===TK_PM;
-	}
-    }
-    
-*/
