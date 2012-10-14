@@ -49,13 +49,27 @@ defn
     'val' ident '=' expr '.' '.'
 
 expr
-    ifExpr
-    ifExpr '.' expr
+    condExpr
+    condExpr '.' expr
 
-ifExpr
+condExpr
     isExpr
     'if' isExpr 'then' expr 'else' expr
     'if' expr 'then' exprs
+    'case' expr 'of' matches
+
+matches
+    match
+    matches match
+
+match
+    pattern '=' expr
+
+pattern
+    value
+    list
+    tuple
+    ident
     
 isExpr
     binaryExpr
