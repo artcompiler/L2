@@ -85,7 +85,7 @@ relationalExpr
 
 additiveExpr
     multiplicativeExpr
-    mutliplicativeExpr additiveOp multiplicativeExpr
+    additiveExpr additiveOp multiplicativeExpr
 
 multiplicativeExpr
     prefixExpr
@@ -106,7 +106,7 @@ primaryExpr
     ident
 
 beginExpr
-    'begin' exprs 'end'
+    'begin' exprs 'end'    (the keywords can be elided when the end of the list is unambiguous)
 
 exprs
     expr
@@ -123,6 +123,24 @@ relationalOp
     '>'
     '<='
     '>='
+
+additiveOp
+    'plus'
+    'minus'
+    '+'
+    '-'
+
+multiplicativeOp
+    'times'
+    'divide'
+    'modulo'
+    'mul'
+    'div'
+    'mod'
+    '*'
+    '/'
+    '%'
+
 ~~~~
 
     
