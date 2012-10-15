@@ -16,47 +16,53 @@ Features include:
 ## Sample Code ##
 
 ~~~
-fun foo n =
-    if n is zero then n.
-    else print n. foo n minus one..
+let countDown n =
+    if n equal zero then n.
+    else begin print n. foo n minus one end..
 ~~~
 
 ~~~
-fun dance n = if n is zero then n else forward two seconds. spin right ninety degrees.
+let dance n = if n is zero then n else begin forward two seconds. spin right ninety degrees.
     backward two seconds. spin right ninety degrees. forward two seconds. spin left
-    ninety degrees. forward two seconds. spin left ninety degrees. dance n minus one..
+    ninety degrees. forward two seconds. spin left ninety degrees. dance n minus one end..
 
-fun flash lights = blink 100 on off off. blink 100 off on off. blink 100 off off on.. 
+let flash lights = blink 100 on off off. blink 100 off on off. blink 100 off off on..
 
-fun start = dance ten. flash lights..
+let start = dance ten. flash lights..
 ~~~
 
 NOTE: '.' terminates an expression. ',' terminates a sub-expression, which useful for resolving
-parsing ambiguities. Two consecutive '.' terminates the current function definition. 
+parsing ambiguities. Two consecutive '.' terminates the current function definition.
 
 ## Syntax ##
 
 ~~~~
+
 program
     defns
 
 defns
     defn
-    defn defns
+    defns defn
 
 defn
-    'fun' ident pattern '=' expr '.' '.'
-    'val' ident '=' expr '.' '.'
+    'let' ident pattern '=' expr '.' '.'
+    'let' ident '=' expr '.' '.'
 
+pattern
+    value
+    list
+    tuple
+    ident
+    
 expr
     condExpr
-    condExpr '.' expr
 
 condExpr
-    isExpr
-    'if' isExpr 'then' expr 'else' expr
-    'if' expr 'then' exprs
-    'case' expr 'of' matches
+    orExpr
+    'if' expr 'then' expr
+    'if' expr 'then' expr 'else' expr
+    'match' expr 'with' matches
 
 matches
     match
@@ -65,19 +71,25 @@ matches
 match
     pattern '=' expr
 
-pattern
-    value
-    list
-    tuple
-    ident
-    
-isExpr
-    binaryExpr
-    binaryExpr isOp binaryExpr
+orExpr
+    andExpr
+    orExpr 'or' andExpr
 
-binaryExpr
+andExpr
+    relationalExpr
+    andExpr 'and' isExpr
+
+relationalExpr
+    binaryExpr
+    isExpr relationalOp binaryExpr
+
+additiveExpr
+    multiplicativeExpr
+    mutliplicativeExpr additiveOp multiplicativeExpr
+
+multiplicativeExpr
     prefixExpr
-    binaryExpr binaryOp prefixExpr
+    mutlplicativeExpr multiplicativeOp prefixExpr
 
 prefixExpr
     prefixOp postfixExpr
@@ -87,18 +99,25 @@ postfixExpr
 
 callExpr
     primaryExpr
-    ident pattern
+    ident args
 
 primaryExpr
     num
     ident
 
-isOp
-    'equal to'
+beginExpr
+    'begin' exprs 'end'
+
+exprs
+    expr
+    exprs '.' expr
+
+relationalOp
+    'equal'
     'less than'
     'greater than'
-    'less than or equal to'
-    'greater than or equal to'
+    'less than or equal'
+    'greater than or equal'
     '='
     '<'
     '>'
