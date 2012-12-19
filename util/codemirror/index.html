@@ -1,7 +1,10 @@
 <html>
 <head>
   <script src="codemirror.js"></script>
+  <script src="simple-hint.js"></script>
   <link rel="stylesheet" href="codemirror.css">
+  <link rel="stylesheet" href="simple-hint.css">
+  <script src="../../src/parse.js"></script>
   <script src="mode-graffiti.js"></script>
   <style>
     .CodeMirror {border-top: 1px solid #ddd; border-bottom: 1px solid #ddd;}
@@ -19,9 +22,12 @@ var myCodeMirror = CodeMirror(document.body, {
     value: "", //"(on recur n).\non play. recur ten.",
     mode:  "graffiti",
     lineWrapping: "true",
-    lineNumbers: "true"
+    lineNumbers: "true",
+    onCursorActivity: function (editor) {
+        CodeMirror.handleCursorEvent(editor)
+        return false
+    }
 });
-
   </script>
 </body>
 </html>
