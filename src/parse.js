@@ -3,30 +3,25 @@
 
 /* copyright (c) 2012, Jeff Dyer */
 
-console.log("GraffitiCode")
-
-if (!exports.GraffitiCode) {
-    GraffitiCode = exports.GraffitiCode = {}
-}
-else {
-    GraffitiCode = exports.GraffitiCode
-}
+var env = exports.env = { }
 
 function alert(str) {
-    throw str
+//    throw str
 }
 
 function print(str) {
-//    console.log(str)
+    console.log(str)
 }
 
 function log(str) {
-//    console.log(str)
+    console.log(str)
 }
+
+var _ = require('./underscore')
 
 // ast module
 
-(function () {
+var ast = exports.ast = (function () {
 
     var ASSERT = true
 
@@ -42,12 +37,7 @@ function log(str) {
         }
     }
     
-//    var nodePool = [ "unused" ];        // nodePool[0] is reserved
-    
-    // maps for fast lookup of nodes
-//    var nodeMap = { }
     var Ast = function() { }
-//    var nodeStack = []
 
     Ast.prototype = {
         intern: intern,
@@ -60,6 +50,7 @@ function log(str) {
         name: name,
         callExpr: callExpr,
         binaryExpr: binaryExpr,
+        prefixExpr: prefixExpr,
         letDefn: letDefn,
         matchExpr: matchExpr,
         matchClause: matchClause,
@@ -68,11 +59,17 @@ function log(str) {
         pop: pop,
         reset: reset,
         topNode: topNode,
+        peek: peek,
+        push: push,
+        div: div,
+        mul: mul,
+        add: add,
+        sub: sub,
+        random: random,
+        neg: neg,
     }
 
-
-
-    GraffitiCode.ast = new Ast;  
+    return new Ast
 
     // private implementation
 
@@ -83,7 +80,12 @@ function log(str) {
     }
 
     function push(ctx, node) {
-        ctx.state.nodeStack.push(intern(ctx, node))
+        if (_.isNumber(node)) {
+            ctx.state.nodeStack.push(node)
+        }
+        else {
+            ctx.state.nodeStack.push(intern(ctx, node))
+        }
     }
 
     function topNode(ctx) {
@@ -93,10 +95,17 @@ function log(str) {
 
     function pop(ctx) {
         var nodeStack = ctx.state.nodeStack
-        log("nodeStack="+nodeStack)
+//        print("nodeStack="+nodeStack)
         return nodeStack.pop()
     }
 
+    function peek(ctx) {
+        var nodeStack = ctx.state.nodeStack
+        log("nodeStack="+nodeStack)
+        return nodeStack[nodeStack.length-1]
+    }
+
+    // deep
     function intern(ctx, n) {
         var nodeMap = ctx.state.nodeMap
         var nodePool = ctx.state.nodePool
@@ -106,6 +115,9 @@ function log(str) {
         var elts = "";
         var elts_nids = [ ];
         for (var i=0; i < count; i++) {
+            if (typeof n.elts[i] === "object") {
+                n.elts[i] = intern(ctx, n.elts[i])
+            }
             elts += n.elts[i]
         }
         var key = tag+count+elts;
@@ -115,14 +127,15 @@ function log(str) {
             nid = nodePool.length - 1
             nodeMap[key] = nid
         }
-        print("intern() key="+key+" nid="+nid)
-        print("intern() pool="+dumpAll(ctx))
+//        print("intern() key="+key+" nid="+nid)
+//        print("intern() pool="+dumpAll(ctx))
             return nid
     }
 
     function node(ctx, nid) {
-        print("node() nid="+nid)
-        print("node() pool="+dumpAll(ctx))
+//        print("node() nid="+nid)
+        var ret = { elts: [] }
+        //print("node() pool="+dumpAll(ctx))
         var n = ctx.state.nodePool[nid]
         if (!n) {
             return {}
@@ -132,31 +145,27 @@ function log(str) {
         case "NUM":
         case "STR":
         case "IDENT":
-            n = n.elts[0];
-            break;
+            //do nothing
+            ret = n
+            break
         default:
             for (var i=0; i < n.elts.length; i++) {
-                n.elts[i] = node(ctx, n.elts[i]);
+                ret.elts[i] = node(ctx, n.elts[i]);
             }
-            break;
+            break
         }
-        return n;
+        return ret
     }
 
     function dumpAll(ctx) {
         var nodePool = ctx.state.nodePool
-        var s = "\n({"
+        var s = "\n{"
         for (var i=1; i < nodePool.length; i++) {
             var n = nodePool[i];
             s = s + "\n    " + i+": "+dump(n) + ","
         }
         s += "\n    root: " + (nodePool.length-1)
-        s += "\n})\n"
-        
-//        for (var i=0; i < nodeStack.length; i++) {
-//            var n = nodeStack[i];
-//            s = s + "\n" + i+": "+dump(n)
-//        }
+        s += "\n}\n"        
         return s
     }
     
@@ -168,17 +177,11 @@ function log(str) {
             var n = nodePool[i];
             obj[i] = nodeToJSON(n)
         }
-        obj["root"] = (nodePool.length-1)
-        
-//        for (var i=0; i < nodeStack.length; i++) {
-//            var n = nodeStack[i];
-//            s = s + "\n" + i+": "+dump(n)
-//        }
+        obj.root = (nodePool.length-1)
         return obj
     }
     
     function nodeToJSON(n) {
-
         if (typeof n === "object") {
             switch (n.tag) {
             case "num":
@@ -207,7 +210,6 @@ function log(str) {
     }
 
     function dump(n) {
-        
         if (typeof n === "object") {
             switch (n.tag) {
             case "num":
@@ -217,14 +219,19 @@ function log(str) {
                 var s = "\""+n.elts[0]+"\"";
                 break;
             default:
-                var s = "{ tag: \"" + n.tag + "\", elts: [ ";
-                for (var i=0; i < n.elts.length; i++) {
-                    if (i > 0) {
-                        s += " , ";
+                if (!n.elts) {
+                    s += "<invalid>"
+                } 
+                else {
+                    var s = "{ tag: \"" + n.tag + "\", elts: [ ";
+                    for (var i=0; i < n.elts.length; i++) {
+                        if (i > 0) {
+                            s += " , ";
+                        }
+                        s += dump(n.elts[i]);
                     }
-                    s += dump(n.elts[i]);
+                    s += " ] }";
                 }
-                s += " ] }";
                 break;
             }
         }
@@ -249,6 +256,26 @@ function log(str) {
         push(ctx, {tag: "IDENT", elts: [str]})
     }
 
+    // interpret a nid in the current environment
+    
+
+    function fold(ctx, def, args) {
+        env.enterEnv(ctx, def.name)
+        var lexicon = def.env.lexicon
+        // setup inner environment record (lexicon)
+        for (var id in lexicon) {
+            if (!id) continue
+            var word = lexicon[id]
+            word.val = args[args.length-1-word.offset]  // offsets are from end of args
+            env.addWord(ctx, id, word)
+        }
+        folder.fold(ctx, def.nid)
+        env.exitEnv(ctx)
+    }
+
+    // FIXME
+    // -- setup lexical environment
+    // -- interpreted body
     function callExpr(ctx, argc) {
         log("ast.callExpr() argc="+argc)
         var elts = []
@@ -256,12 +283,77 @@ function log(str) {
             elts.push(pop(ctx))
             argc--
         }
-        var def = findWord(ctx, pop(ctx))
-        push(ctx, {tag: def.name, elts: elts})
+        var e = node(ctx, pop(ctx)).elts
+        if (!e) {
+            return
+        }
+        var name = e[0]   // assumes node is a primitive
+//        print("callExpr() name="+name+" elts="+elts)
+        var def = env.findWord(ctx, name)
+        if (!def) return
+        if (def.nid) {
+            return fold(ctx, def, elts)
+        }
+        else {
+            push(ctx, {tag: def.name, elts: elts})
+        }
     }
 
-    function binaryExpr(ctx, op) {
-        push(ctx, {tag: op, elts: [pop(ctx), pop(ctx)]})
+    function binaryExpr(ctx, name) {
+        log("ast.binaryExpr() name="+name)
+        var elts = []
+        elts.push(pop(ctx))
+        elts.push(pop(ctx))
+        push(ctx, {tag: name, elts: elts})
+    }
+
+    function prefixExpr(ctx, name) {
+        log("ast.prefixExpr() name="+name)
+        var elts = []
+        elts.push(pop(ctx))
+        push(ctx, {tag: name, elts: elts})
+    }
+
+    function random(ctx) {
+        var max = +node(ctx, pop(ctx)).elts[0]
+        var min = +node(ctx, pop(ctx)).elts[0]
+        var rand = Math.random()
+        var num = Math.floor(min + (max-min)*rand)
+        number(ctx, num)
+    }
+
+    function neg(ctx) {
+        log("ast.neg()")
+        var v1 = +node(ctx, pop(ctx)).elts[0]
+        number(ctx, -1*v1)
+    }
+
+    function div(ctx) {
+        log("ast.div()")
+        var v2 = +node(ctx, pop(ctx)).elts[0]
+        var v1 = +node(ctx, pop(ctx)).elts[0]
+        number(ctx, v1/v2)
+    }
+
+    function mul(ctx) {
+        log("ast.mul()")
+        var v2 = +node(ctx, pop(ctx)).elts[0]
+        var v1 = +node(ctx, pop(ctx)).elts[0]
+        number(ctx, v1*v2)
+    }
+
+    function add(ctx) {
+        log("ast.add()")
+        var v2 = +node(ctx, pop(ctx)).elts[0]
+        var v1 = +node(ctx, pop(ctx)).elts[0]
+        number(ctx, v1+v2)
+    }
+
+    function sub(ctx) {
+        log("ast.sub()")
+        var v2 = +node(ctx, pop(ctx)).elts[0]
+        var v1 = +node(ctx, pop(ctx)).elts[0]
+        number(ctx, v1-v2)
     }
 
     function matchExpr(ctx, n) {
@@ -283,16 +375,23 @@ function log(str) {
     }
 
     function exprs(ctx, n) {
-        log("ast.exprs() n="+n)
+//        print("ast.exprs() n="+n)
         var elts = []
         for (var i = n; i > 0; i--) {
-            elts.push(pop(ctx))
+            var elt = pop(ctx)
+            if (elt !== void 0) {
+                elts.push(elt)
+            }
         }
-        push(ctx, {tag: "EXPRS", elts: elts})
+        push(ctx, {tag: "EXPRS", elts: elts.reverse()})
     }
 
     function letDefn(ctx) {
-        push(ctx, {tag: "LET", elts: [pop(ctx), pop(ctx)]})
+        pop(ctx)  // name
+        pop(ctx)  // body
+        for (var i = 0; i < ctx.state.paramc; i++) {
+            pop(ctx) // params
+        }
     }
 
     function program(ctx) {
@@ -311,7 +410,9 @@ function log(str) {
         this.string = string;
         this.tabSize = tabSize || 8;
     }
-    
+
+    exports.StringStream = StringStream
+
     StringStream.prototype = {
         eol: function() {return this.pos >= this.string.length;},
         sol: function() {return this.pos == 0;},
@@ -361,12 +462,14 @@ function log(str) {
         current: function(){return this.string.slice(this.start, this.pos);}
     }
 
-    GraffitiCode.StringStream = StringStream
 })();
 
+// parser
 (function () {
-    
-    var ast = GraffitiCode.ast
+
+    var lexicon = require('./draw-lexicon')
+    var globalLexicon = lexicon.global
+
     
     function assert(b, str) {
         if (!b) {
@@ -376,6 +479,7 @@ function log(str) {
 
     var TK_IDENT  = 0x01
     var TK_NUM    = 0x02
+    var TK_STR    = 0x03
     var TK_EQUAL  = 0x04
     var TK_IF     = 0x05
     var TK_THEN   = 0x06
@@ -403,101 +507,13 @@ function log(str) {
     var TK_MINUS        = 0xA8
     var TK_DOT          = 0xA9
     var TK_COLON        = 0xAA
-
-    var globalLexicon = {
-        "let" : { tk: TK_LET, cls: "keyword" },
-        "if" : { tk: TK_IF, cls: "keyword" },
-        "then" : { tk: TK_THEN, cls: "keyword" },
-        "else" : { tk: TK_ELSE, cls: "keyword" },
-        "match" : { tk: TK_MATCH, cls: "keyword" },
-        "with" : { tk: TK_WITH, cls: "keyword", length: 0 },
-        "end" : { tk: TK_END, cls: "keyword", length: 0 },
-        "or" : { tk: TK_OR, cls: "keyword", length: 0 },
-        "is" : { tk: TK_IS, cls: "operator", length: 1 },
-        "equal" : { tk: TK_IDENT, cls: "operator", length: 0 },
-
-        "zero" : { tk: TK_NUM, cls: "number", length: 0 },
-        "one" : { tk: TK_NUM, cls: "number", length: 0 },
-        "two" : { tk: TK_NUM, cls: "number", length: 0 },
-        "three" : { tk: TK_NUM, cls: "number", length: 0 },
-        "four" : { tk: TK_NUM, cls: "number", length: 0 },
-        "five" : { tk: TK_NUM, cls: "number", length: 0 },
-        "six" : { tk: TK_NUM, cls: "number", length: 0 },
-        "seven" : { tk: TK_NUM, cls: "number", length: 0 },
-        "eight" : { tk: TK_NUM, cls: "number", length: 0 },
-        "nine" : { tk: TK_NUM, cls: "number", length: 0 },
-        "ten" : { tk: TK_NUM, cls: "method", length: 0 },
-        "eleven" : { tk: TK_NUM, cls: "method", length: 0 },
-        "twelve" : { tk: TK_NUM, cls: "method", length: 0 },
-        "thirteen" : { tk: TK_NUM, cls: "method", length: 0 },
-        "fourteen" : { tk: TK_NUM, cls: "method", length: 0 },
-        "fifteen" : { tk: TK_NUM, cls: "method", length: 0 },
-        "sixteen" : { tk: TK_NUM, cls: "method", length: 0 },
-        "seventeen" : { tk: TK_NUM, cls: "method", length: 0 },
-        "eighteen" : { tk: TK_NUM, cls: "method", length: 0 },
-        "nineteen" : { tk: TK_NUM, cls: "method", length: 0 },
-        "twenty" : { tk: TK_NUM, cls: "method", length: 0 },
-        "thirty" : { tk: TK_NUM, cls: "method", length: 0 },
-        "forty" : { tk: TK_NUM, cls: "method", length: 0 },
-        "fifty" : { tk: TK_NUM, cls: "method", length: 0 },
-        "sixty" : { tk: TK_NUM, cls: "method", length: 0 },
-        "seventy" : { tk: TK_NUM, cls: "method", length: 0 },
-        "eighty" : { tk: TK_NUM, cls: "method", length: 0 },
-        "ninety" : { tk: TK_NUM, cls: "method", length: 0 },
-
-        "print" : { tk: TK_IDENT, cls: "method", length: 1 },
-
-        // triangle
-        "size" : { tk: TK_IDENT, cls: "method", length: 2 },
-        "background" : { tk: TK_IDENT, cls: "method", length: 1 },
-        "triangle" : { tk: TK_IDENT, name: "TRI", cls: "method", length: 6 },
-        "draw" : { tk: TK_IDENT, cls: "method", length: 5 },
-        "fill" : { tk: TK_IDENT, cls: "method", length: 1 },
-        "stroke" : { tk: TK_IDENT, cls: "method", length: 1 },
-        "color" : { tk: TK_IDENT, cls: "method", length: 3 },        
-        "noLoop" : { tk: TK_IDENT, cls: "method", length: 0 },
-        "deg" : { tk: TK_POSTOP, cls: "operator", length: 0 },
-
-        // bitzee
-        "start" : { tk: TK_IDENT, cls: "handler", length: 0 },
-        "remote" : { tk: TK_IDENT, cls: "handler", length: 1 },
-        "forward" : { tk: TK_IDENT, cls: "method", length: 1 },
-        "backward" : { tk: TK_IDENT, cls: "method", length: 1 },
-        "stop" : { tk: TK_IDENT, cls: "method", length: 1 },
-        "spin" : { tk: TK_IDENT, cls: "method", length: 1 },
-        "play" : { tk: TK_NUM, cls: "number", length: 0 },
-        "slow" : { tk: TK_NUM, cls: "number", length: 0 },
-        "seconds" : { tk: TK_POSTOP, cls: "operator", length: 0 },
-        "ms" : { tk: TK_POSTOP, cls: "operator", length: 0 },
-        "not" : { tk: TK_PREOP, cls: "operator", length: 0 },
-        "minus" : { tk: TK_BINOP, cls: "operator", length: 0 },
-        "blink" : { tk: TK_IDENT, cls: "method", length: 4 },
-        "left" : { tk: TK_IDENT, cls: "val", length: 0 },
-        "right" : { tk: TK_IDENT, cls: "val", length: 0 },
-        "speed" : { tk: TK_IDENT, cls: "method", length: 1 },
-        "full" : { tk: TK_IDENT, cls: "val", length: 0 },
-        "half" : { tk: TK_IDENT, cls: "val", length: 0 },
-        "none" : { tk: TK_IDENT, cls: "val", length: 0 },
-        "high" : { tk: TK_IDENT, cls: "val", length: 0 },
-        "low" : { tk: TK_IDENT, cls: "val", length: 0 },
-        "on" : { tk: TK_IDENT, cls: "val", length: 0 },
-        "off" : { tk: TK_IDENT, cls: "val", length: 0 },
-        "delay" : { tk: TK_IDENT, cls: "method", length: 1 },
-        "random" : { tk: TK_IDENT, cls: "method", length: 2 },
-
-        // popcorn
-
-        "popcorn" : { tk: TK_IDENT, cls: "method", length: 1 },
-        "footnote" : { tk: TK_IDENT, cls: "method", length: 1 },
-        "struct" : {tk: TK_IDENT, cls: "method", length: 3 },
-
-    }
-
-    GraffitiCode.globalLexicon = globalLexicon
+    var TK_PLUS         = 0xAB
+    var TK_BACKQUOTE    = 0xAC
+    var TK_COMMENT      = 0xAD
 
     function findWord(ctx, lexeme) {
         var env = ctx.state.env
-        print("findWord() lexeme=" + lexeme)
+        print("findWord() lexeme=" + JSON.stringify(lexeme))
         for (var i = env.length-1; i >= 0; i--) {
             var word = env[i].lexicon[lexeme]
             if (word) {
@@ -507,20 +523,27 @@ function log(str) {
         return null
     }
 
+    env.findWord = findWord
+
     function addWord(ctx, lexeme, entry) {
-        print("addWord() lexeme=" + lexeme)
+//        print("addWord() lexeme=" + lexeme)
         topEnv(ctx).lexicon[lexeme] = entry
         return null
     }
 
+    env.addWord = addWord
+
     function enterEnv(ctx, name) {
-        ctx.state.env.push({name: name, lexicon: []})
+        ctx.state.env.push({name: name, lexicon: {}})
     }
+
+    env.enterEnv = enterEnv
 
     function exitEnv(ctx) {
         ctx.state.env.pop()
     }
 
+    env.exitEnv = exitEnv
 
     function eat(ctx, tk) {
         log("eat() tk="+tk)
@@ -539,17 +562,28 @@ function log(str) {
         }
     }
 
+//    function next(ctx) {
+//        var tk = ctx.scan.start()
+//        log("next() tk="+tk+" lexeme="+lexeme)
+//        return tk
+//    }
+
     function next(ctx) {
-        var tk = ctx.scan.start()
-        log("next() tk="+tk+" lexeme="+lexeme)
+        var tk = peek(ctx)
+        ctx.state.nextToken = -1
+        print("next() tk="+tk+" lexeme="+lexeme)
         return tk
     }
 
     function peek(ctx) {
-        var tk = ctx.scan.start()
-        //log("peek() tk="+tk+" lexeme="+lexeme)
-        if (tk) {
-            ctx.scan.stream.backUp(lexeme.length)
+        var tk
+        var nextToken = ctx.state.nextToken
+        if (nextToken < 0) {
+            tk = ctx.scan.start()
+            ctx.state.nextToken = tk
+        }
+        else {
+            tk = nextToken
         }
         return tk
     }
@@ -561,6 +595,14 @@ function log(str) {
         eat(ctx, TK_NUM)
         cc.cls = "number"
         ast.number(ctx, lexeme)
+        return cc
+    }
+
+    function string(ctx, cc) {
+        log("number()")
+        eat(ctx, TK_STR)
+        cc.cls = "string"
+        ast.string(ctx, lexeme.substring(1,lexeme.length-1)) // strip quotes
         return cc
     }
 
@@ -666,6 +708,9 @@ function log(str) {
         if (match(ctx, TK_NUM)) {
             return number(ctx, cc)
         }
+        else if (match(ctx, TK_STR)) {
+            return string(ctx, cc)
+        }
         else if (match(ctx, TK_LEFTBRACE)) {
             var ret = map(ctx, cc)
             log("map() ret=" + ret)
@@ -682,27 +727,28 @@ function log(str) {
 
     function callExpr(ctx, cc) {
         log("callExpr()")
-        var ret = primaryExpr(ctx, function (ctx) {
-            log("found primaryExpr topNode="+ast.node(ctx, ast.topNode(ctx)))
-            var name = ast.node(ctx, ast.topNode(ctx))
+        return primaryExpr(ctx, function (ctx) {
+            var name = ast.node(ctx, ast.topNode(ctx)).elts[0]
             var tk = findWord(ctx, name)
+            log("found primaryExpr tk="+tk+" topNode="+ast.node(ctx, ast.topNode(ctx)).elts[0])
             if (tk && tk.cls === "method") {
                 startArgs(ctx, tk.length)
                 return args(ctx, cc)
             }
-            return cc
+            return cc(ctx)
         })
-        log("primaryExpr() ret="+ret)
-        return ret
     }
 
     function startArgs(ctx, len) {
+        log("startArgs() len="+len)
         ctx.state.argcStack.push(ctx.state.argc)
-        ctx.state.length = ctx.state.argc = len
+        ctx.state.paramcStack.push(ctx.state.paramc)
+        ctx.state.paramc = ctx.state.argc = len
     }
 
     function finishArgs(ctx) {
         ctx.state.argc = ctx.state.argcStack.pop()
+        ctx.state.paramc = ctx.state.paramcStack.pop()
     }
  
     function arg(ctx, cc) {
@@ -714,8 +760,8 @@ function log(str) {
     function args(ctx, cc) {
         log("args()")
         if (ctx.state.argc === 0) {
+            ast.callExpr(ctx, ctx.state.paramc)
             finishArgs(ctx)
-            ast.callExpr(ctx, ctx.state.length)
             return cc
         }
         return arg(ctx, function (ctx) {
@@ -731,13 +777,25 @@ function log(str) {
                 eat(ctx, TK_POSTOP)
                 cc.cls = "operator"
                 ast.postfixExpr(ctx, lexeme)
+                return cc
             }
-            return cc
+            return cc(ctx)
         })
     }
     
     function prefixExpr(ctx, cc) {
         log("prefixExpr()")
+        if (match(ctx, TK_MINUS)) {
+            eat(ctx, TK_MINUS)
+            var ret = function(ctx) {
+                return postfixExpr(ctx, function (ctx) {
+                    ast.prefixExpr(ctx, "NEG")
+                    return cc
+                })                
+            }
+            ret.cls = "number"
+            return ret
+        }
         return postfixExpr(ctx, cc)
     }
     
@@ -745,16 +803,17 @@ function log(str) {
         log("binaryExpr()")
         var ret = prefixExpr(ctx, function (ctx) {
             if (match(ctx, TK_BINOP)) {
-                var word = eat(ctx, TK_BINOP)
+                eat(ctx, TK_BINOP)
+                var op = findWord(ctx, lexeme).name
                 var ret = function (ctx) {
                     var ret = binaryExpr(ctx, cc)
-                    ast.binaryExpr(ctx, word)
+                    ast.binaryExpr(ctx, op)
                     return ret
                 }
                 ret.cls = "operator"
                 return ret
             }
-            return cc
+            return cc(ctx)
         })
         log("prefixExpr() ret="+ret)
         return ret
@@ -778,8 +837,9 @@ function log(str) {
                         })
                     })
                 }
+                return cc
             }
-            return cc
+            return cc(ctx)
         })
         log("binaryExpr() ret="+ret)
         return ret
@@ -835,7 +895,6 @@ function log(str) {
         ret.cls = "keyword"
         return ret
     }
-
 
     function matchesClause(ctx, cc) {
         log("matchesClause()")
@@ -920,7 +979,7 @@ function log(str) {
     }
 
     function countCounter(ctx) {
-        print("* * * * countCounter() exprc="+(ctx.state.exprc+1))
+//        print("* * * * countCounter() exprc="+(ctx.state.exprc+1))
         ctx.state.exprc++
     }
 
@@ -945,20 +1004,22 @@ function log(str) {
         log("exprsFinish()")
         ast.exprs(ctx, ctx.state.exprc)
         stopCounter(ctx)
-        return cc
+        return cc(ctx)   // call continuation when there is not new input expected
     }
 
     function exprs(ctx, cc) {
         log("exprs()")
-//        if (emptyInput(ctx)) {
-//            return exprsFinish(ctx, cc)
-//        }
         if (match(ctx, TK_DOT)) {   // second dot
             eat(ctx, TK_DOT)
-            return exprsFinish(ctx, cc)
+            var ret = function(ctx) {
+                return exprsFinish(ctx, cc)
+            }
+            ret.cls = "punc"
+            return ret
         }
 
-        var ret = expr(ctx, function (ctx) {
+//        var ret = expr(ctx, function (ctx) {
+        return expr(ctx, function (ctx) {
             countCounter(ctx)
             if (match(ctx, TK_DOT)) {
                 eat(ctx, TK_DOT)
@@ -973,23 +1034,17 @@ function log(str) {
             }
             return exprsFinish(ctx, cc)
         })
-        log("expr() ret="+ret)
-        return ret
+//        return ret
     }
 
     function program(ctx, cc) {
         log("program()")
-//        ast.reset(ctx)
         return exprsStart(ctx, function (ctx) {
-//            while (match(ctx, TK_DOT)) {   // consume extra dots at end of program
-//                eat(ctx, TK_DOT)
-//            }
+            folder.fold(ctx, ast.pop(ctx))  // fold the exprs on top
             ast.program(ctx)
             return cc
         })
     }
-
-    GraffitiCode.program = program
 
     function defs(ctx, cc) {
         log("defs()")
@@ -1007,15 +1062,19 @@ function log(str) {
             eat(ctx, TK_LET)
             var ret = function (ctx) {
                 var ret = name(ctx, function (ctx) {
-                    var name = ast.node(ctx, ast.topNode(ctx))
+                    var name = ast.node(ctx, ast.topNode(ctx)).elts[0]
                     addWord(ctx, name, { tk: TK_IDENT, cls: "method", length: 0 })
-                    ctx.state.argc = 0
-                    enterEnv(ctx, name)
+                    ctx.state.paramc = 0
+                    enterEnv(ctx, name)  // FIXME need to link to outer env
                     return params(ctx, function (ctx) {
-                        findWord(ctx, topEnv(ctx).name).length = ctx.state.argc
+                        var func = findWord(ctx, topEnv(ctx).name)
+                        func.length = ctx.state.paramc
+                        func.env = topEnv(ctx)
                         eat(ctx, TK_EQUAL)
                         var ret = function(ctx) {
                             return exprsStart(ctx, function (ctx) {
+                                var def = findWord(ctx, topEnv(ctx).name)
+                                def.nid = ast.peek(ctx)   // save node id for aliased code
                                 exitEnv(ctx)
                                 ast.letDefn(ctx)
                                 return cc
@@ -1041,8 +1100,8 @@ function log(str) {
         }
         return function (ctx) {
             var ret = primaryExpr(ctx, function (ctx) {
-                ctx.state.argc++
-                addWord(ctx, lexeme, { tk: TK_IDENT, cls: "val" })
+                addWord(ctx, lexeme, { tk: TK_IDENT, cls: "val", offset: ctx.state.paramc })
+                ctx.state.paramc++
                 return params(ctx, cc)
             })
             ret.cls = "ident"
@@ -1063,10 +1122,21 @@ function log(str) {
         return ctx.state.env[ctx.state.env.length-1]
     }
 
-    function parse(stream, state) {
+    var lastAST
+
+    function parse(stream, state, doRecompile) {
         var ctx = {scan: scanner(stream), state: state}
         var cls
         try {
+            var c;
+            while ((c = stream.peek()) && (c===' ' || c==='\t')) {
+                stream.next()
+            }
+            // if this is a blank line, treat it as a comment
+            if (stream.peek()===void 0) {
+                throw "comment"
+            }
+
             // call the continuation and store the next continuation
             //log(">>parse() cc="+state.cc+"\n")
             if (state.cc === null) {
@@ -1078,27 +1148,43 @@ function log(str) {
                 cls = cc.cls
             }
 
-//            GraffitiCode.ui.updateAST(ast.dumpAll(ctx))
-//            GraffitiCode.ui.compileCode(ast.poolToJSON(ctx))
-            
-//            if (cc && emptyInput(ctx)) {
-//                while((cc=cc(ctx, null))) ;
-//            }
+            if (cc === null && doRecompile) {
+                var thisAST = ast.poolToJSON(ctx)
+                var lastAST = lastAST
+                if (!_.isEqual(lastAST, thisAST)) {
+                    compileCode(thisAST)
+                }
+                lastAST = thisAST
+            }
+
+            var c;
+            while ((c = stream.peek()) &&
+                   (c===' ' || c==='\t')) {
+                stream.next()
+            }
 
             print("---------")
-            log("parse() pos="+stream.pos)
-            log("parse() lexeme="+lexeme)
-            log("parse() cls="+cls)
+            print("parse() pos="+stream.pos)
+            print("parse() lexeme="+lexeme)
+            print("parse() cls="+cls)
             print("parse() cc="+cc+"\n")
             print("parse() nodePool="+ast.dumpAll(ctx)+"\n")
+            print("parse() nodeStack="+ctx.state.nodeStack+"\n")
 
         }
         catch (x) {
             log("---------")
             log("exception caught!!!=")
             if (x === "syntax error") {
-                cls = "comment"
+                cls = "error"
                 state.cc = null
+            }
+            else
+            if (x === "comment") {
+//                print("comment found")
+                cls = x
+//                next(ctx)
+                //state.cc = null
             }
             else {
                 alert(x)
@@ -1111,10 +1197,6 @@ function log(str) {
 
         return cls
     }
-
-    GraffitiCode.parse = parse
-
-    console.log("parse="+GraffitiCode.parse)
 
     var lexeme = ""
 
@@ -1143,9 +1225,6 @@ function log(str) {
                 case 13:  // carriage return
                     c = ' '
                     continue
-                case 45:  // dash
-                    lexeme += String.fromCharCode(c);
-                    return TK_MINUS
                 case 46:  // dot
                     lexeme += String.fromCharCode(c);
                     return TK_DOT
@@ -1155,9 +1234,6 @@ function log(str) {
                 case 61:  // equal
                     lexeme += String.fromCharCode(c);
                     return TK_EQUAL
-                case 92:  // backslash
-                    lexeme += String.fromCharCode(c);
-                    return latex();
                 case 40:  // left paren
                     lexeme += String.fromCharCode(c);
                     return TK_LEFTPAREN
@@ -1167,6 +1243,9 @@ function log(str) {
                 case 43:  // plus
                     lexeme += String.fromCharCode(c);
                     return TK_PLUS
+                case 45:  // dash
+                    lexeme += String.fromCharCode(c);
+                    return TK_MINUS
                 case 91:  // left bracket
                     lexeme += String.fromCharCode(c);
                     return TK_LEFTBRACKET
@@ -1179,10 +1258,21 @@ function log(str) {
                 case 125: // right brace
                     lexeme += String.fromCharCode(c);
                     return TK_RIGHTBRACE
-                    
+                case 34:  // double quote
+                case 39:  // single quote
+                    return string(c)
+
+                case 96:  // backquote
+                case 47:  // slash
+                case 92:  // backslash
+                case 95:  // underscore
+                case 33:  // !
+                case 124: // |
+                    comment(c)
+                    throw "comment"
+
                 case 94:  // caret
                 case 44:  // comma
-                case 47:  // slash
                 case 42:  // asterisk
                     lexeme += String.fromCharCode(c);
                     return c; // char code is the token id
@@ -1220,10 +1310,51 @@ function log(str) {
             return TK_NUM;
         }
         
+        function string(c) {
+            var quoteChar = c
+            lexeme += String.fromCharCode(c)
+            c = (s = stream.next()) ? s.charCodeAt(0) : 0
+
+            while (c !== quoteChar && c !== 0) {
+                lexeme += String.fromCharCode(c);
+                var s;
+                c = (s = stream.next()) ? s.charCodeAt(0) : 0
+            }
+
+            if (c) {
+                lexeme += String.fromCharCode(c)
+                return TK_STR;
+            }
+            else {
+                return 0
+            }
+        }
+
+        function comment(c) {
+            var quoteChar = c
+            c = (s = stream.next()) ? s.charCodeAt(0) : 0
+
+            while (c !== quoteChar && c != 10 && c!= 13 && c !== 0) {
+                var s;
+                c = (s = stream.next()) ? s.charCodeAt(0) : 0
+            }
+
+            return TK_COMMENT
+        }
+        
         function ident(c) {
             while ((c >= 'A'.charCodeAt(0) && c <= 'Z'.charCodeAt(0)) ||
-                   (c >= 'a'.charCodeAt(0) && c <= 'z'.charCodeAt(0))) {
-                lexeme += String.fromCharCode(c);                
+                   (c >= 'a'.charCodeAt(0) && c <= 'z'.charCodeAt(0)) || 
+                   (c === '-'.charCodeAt(0)) || 
+                   (c === '@'.charCodeAt(0)) || 
+                   (c === '+'.charCodeAt(0)) || 
+                   (c === '#'.charCodeAt(0)) || 
+                   (c === ':'.charCodeAt(0)) || 
+                   (c === '_'.charCodeAt(0)) || 
+                   (c === '~'.charCodeAt(0)) || 
+                   (c >= '0'.charCodeAt(0) && c <= '9'.charCodeAt(0))) 
+            {
+                lexeme += String.fromCharCode(c);                 
                 c = stream.peek() ? stream.next().charCodeAt(0) : 0
             }
         
@@ -1240,7 +1371,8 @@ function log(str) {
         }
     }
 
-    GraffitiCode.parser = {
+    print("globalLexicon="+JSON.stringify(globalLexicon))
+    var parser = {
         token: function(stream, state) {
             return parse(stream, state)
         },
@@ -1250,15 +1382,468 @@ function log(str) {
                 cc: program,   // top level parsing function
                 argc: 0,
                 argcStack: [0],
+                paramc: 0,
+                paramcStack: [0],
                 exprc: 0,
                 exprcStack: [0],
                 env: [ {name: "global", lexicon: globalLexicon } ],
                 nodeStack: [],
                 nodePool: ["unused"],
                 nodeMap: {},
+                nextToken: -1,
             }
         },
 
         parse: parse
     }
-})()
+
+    exports.startState = parser.startState
+    exports.parse = parser.parse
+
+})(); // end parser
+
+var folder = exports.folder = function() {
+
+
+    function print(str) {
+//        console.log(str)
+    }
+
+    var table = {
+        "PROG" : program,
+        "EXPRS" : exprs,
+        "CALL" : callExpr,
+        "IDENT" : ident,
+        "NUM" : num,
+        "STR" : str,
+        "TRI" : triangle,
+        "ROTATE" : rotate,
+        "SCALE" : scale,
+        "TRISIDE" : triside,
+        "RECT" : rectangle,
+        "ELLIPSE" : ellipse,
+        "BEZIER" : bezier,
+        "LINE" : line,
+        "POINT" : point,
+
+        "PATH" : path,
+        "CLOSEPATH" : closepath,
+        "MOVETO" : moveto,
+        "LINETO" : lineto,
+        "CURVETO" : curveto,
+
+        "RAND" : random,
+        "GRID" : grid,
+        "TRANSLATE" : translate,
+        "SKEWX" : skewX,
+        "SKEWY" : skewY,
+        "RGB" : rgb,
+        "RGBA" : rgba,
+        "FILL" : fill,
+        "STROKE" : stroke,
+        "STROKEWIDTH" : strokeWidth,
+        "COLOR" : color,
+        "TEXT" : text,
+        "FSIZE" : fsize,
+        "SIZE" : size,
+        "BACKGROUND": background,
+        "DIV": div,
+        "MUL": mul,
+        "SUB": sub,
+        "ADD": add,
+        "NEG": neg,
+    }
+
+    var canvasWidth = 0
+    var canvasHeight = 0
+
+    return {
+        fold: fold,
+    }
+
+    // CONTROL FLOW ENDS HERE
+    
+    var nodePool
+    var ctx
+
+    function fold(cx, nid) {
+        ctx = cx
+        nodePool = ctx.state.nodePool
+        visit(nid)
+    }
+
+    function visit(nid) {
+
+        var node = nodePool[nid]
+        
+        print("visit() nid="+nid)
+
+        if (node == null) {
+            return null
+        }
+
+        if (node.tag === void 0) {
+            return [ ]  // clean up stubs
+        }
+        else if (isFunction(table[node.tag])) {
+            var ret = table[node.tag](node)
+            print("ret="+ret)
+            return ret
+        }
+        else {
+            throw "missing visitor method for " + node.tag                
+        }
+
+        throw "missing visitor method for " + node
+    }
+
+    function isArray(v) {
+        return _.isArray(v)
+    }
+
+    function isObject(v) {
+        return _isObjet(v)
+    }
+
+    function isString(v) {
+        return _.isString(v)
+    }
+
+    function isPrimitive(v) {
+        return _.isNull(v) || _.isString(v) || _.isNumber(v) || _.isBoolean(v)
+    }
+
+    function isFunction(v) {
+        return _.isFunction(v)
+    }
+
+    // BEGIN VISITOR METHODS
+
+    var edgesNode
+
+    function program(node) {
+        print("program()")
+        visit(node.elts[0])
+        ast.program(ctx)
+    }
+
+    function exprs(node) {
+        print("exprs()")
+        for (var i = 0; i < node.elts.length; i++) {
+            visit(node.elts[i])
+        }
+        ast.exprs(ctx, node.elts.length)
+    }
+
+    function callExpr(node) {
+        print("callExpr")
+        throw "not used"
+    }
+
+    function triangle(node) {
+        ast.name(ctx, "triangle")
+        for (var i = node.elts.length-1; i >= 0; i--) {
+            visit(node.elts[i])
+        }
+        ast.callExpr(ctx, node.elts.length)
+    }
+
+    function triside(node) {
+        ast.name(ctx, "triside")
+        for (var i = node.elts.length-1; i >= 0; i--) {
+            visit(node.elts[i])
+        }
+        ast.callExpr(ctx, node.elts.length)
+    }
+
+    function rectangle(node) {
+        ast.name(ctx, "rectangle")
+        for (var i = node.elts.length-1; i >= 0; i--) {
+            visit(node.elts[i])
+        }
+        ast.callExpr(ctx, node.elts.length)
+    }
+
+    function ellipse(node) {
+        ast.name(ctx, "ellipse")
+        for (var i = node.elts.length-1; i >= 0; i--) {
+            visit(node.elts[i])
+        }
+        ast.callExpr(ctx, node.elts.length)
+    }
+
+    function bezier(node) {
+        ast.name(ctx, "bezier")
+        for (var i = node.elts.length-1; i >= 0; i--) {
+            visit(node.elts[i])
+        }
+        ast.callExpr(ctx, node.elts.length)
+    }
+
+
+    function line(node) {
+        ast.name(ctx, "line")
+        for (var i = node.elts.length-1; i >= 0; i--) {
+            visit(node.elts[i])
+        }
+        ast.callExpr(ctx, node.elts.length)
+    }
+
+    function point(node) {
+        ast.name(ctx, "point")
+        for (var i = node.elts.length-1; i >= 0; i--) {
+            visit(node.elts[i])
+        }
+        ast.callExpr(ctx, node.elts.length)
+    }
+
+    function path(node) {
+        ast.name(ctx, "path")
+        for (var i = node.elts.length-1; i >= 0; i--) {
+            visit(node.elts[i])
+        }
+        ast.callExpr(ctx, node.elts.length)
+    }
+
+    function closepath(node) {
+        ast.name(ctx, "closepath")
+        for (var i = node.elts.length-1; i >= 0; i--) {
+            visit(node.elts[i])
+        }
+        ast.callExpr(ctx, node.elts.length)
+    }
+
+    function moveto(node) {
+        ast.name(ctx, "moveto")
+        for (var i = node.elts.length-1; i >= 0; i--) {
+            visit(node.elts[i])
+        }
+        ast.callExpr(ctx, node.elts.length)
+    }
+
+    function lineto(node) {
+        ast.name(ctx, "lineto")
+        for (var i = node.elts.length-1; i >= 0; i--) {
+            visit(node.elts[i])
+        }
+        ast.callExpr(ctx, node.elts.length)
+    }
+
+    function curveto(node) {
+        ast.name(ctx, "curveto")
+        for (var i = node.elts.length-1; i >= 0; i--) {
+            visit(node.elts[i])
+        }
+        ast.callExpr(ctx, node.elts.length)
+    }
+
+    function random(node) {
+        for (var i = node.elts.length-1; i >= 0; i--) {
+            visit(node.elts[i])
+        }
+        ast.random(ctx)
+    }
+
+    function grid(node) {
+        ast.name(ctx, "grid")
+        for (var i = node.elts.length-1; i >= 0; i--) {
+            visit(node.elts[i])
+        }
+        ast.callExpr(ctx, node.elts.length)
+    }
+
+    function rotate(node) {
+        ast.name(ctx, "rotate")
+        for (var i = node.elts.length-1; i >= 0; i--) {
+            visit(node.elts[i])
+        }
+        ast.callExpr(ctx, node.elts.length)
+    }
+
+    function translate(node) {
+        ast.name(ctx, "translate")
+        for (var i = node.elts.length-1; i >= 0; i--) {
+            visit(node.elts[i])
+        }
+        ast.callExpr(ctx, node.elts.length)
+    }
+
+    function scale(node) {
+        ast.name(ctx, "scale")
+        for (var i = node.elts.length-1; i >= 0; i--) {
+            visit(node.elts[i])
+        }
+        ast.callExpr(ctx, node.elts.length)
+    }
+
+    function skewX(node) {
+        ast.name(ctx, "skewx")
+        for (var i = node.elts.length-1; i >= 0; i--) {
+            visit(node.elts[i])
+        }
+        ast.callExpr(ctx, node.elts.length)
+    }
+
+    function skewY(node) {
+        ast.name(ctx, "skewy")
+        for (var i = node.elts.length-1; i >= 0; i--) {
+            visit(node.elts[i])
+        }
+        ast.callExpr(ctx, node.elts.length)
+    }
+
+    function rgb(node) {
+        ast.name(ctx, "rgb")
+        for (var i = node.elts.length-1; i >= 0; i--) {
+            visit(node.elts[i])
+        }
+        ast.callExpr(ctx, node.elts.length)
+    }
+
+    function rgba(node) {
+        ast.name(ctx, "rgba")
+        for (var i = node.elts.length-1; i >= 0; i--) {
+            visit(node.elts[i])
+        }
+        ast.callExpr(ctx, node.elts.length)
+    }
+
+    function color(node) {
+        ast.name(ctx, "color")
+        for (var i = node.elts.length-1; i >= 0; i--) {
+            visit(node.elts[i])
+        }
+        ast.callExpr(ctx, node.elts.length)
+    }
+
+    function text(node) {
+        ast.name(ctx, "text")
+        for (var i = node.elts.length-1; i >= 0; i--) {
+            visit(node.elts[i])
+        }
+        ast.callExpr(ctx, node.elts.length)
+    }
+
+    function fsize(node) {
+        ast.name(ctx, "font-size")
+        for (var i = node.elts.length-1; i >= 0; i--) {
+            visit(node.elts[i])
+        }
+        ast.callExpr(ctx, node.elts.length)
+    }
+
+    function size(node) {
+        ast.name(ctx, "size")
+        for (var i = node.elts.length-1; i >= 0; i--) {
+            visit(node.elts[i])
+        }
+        ast.callExpr(ctx, node.elts.length)
+    }
+
+    function background(node) {
+        ast.name(ctx, "background")
+        for (var i = node.elts.length-1; i >= 0; i--) {
+            visit(node.elts[i])
+        }
+        ast.callExpr(ctx, node.elts.length)
+    }
+
+    function neg(node) {
+        visit(node.elts[0])
+        ast.neg(ctx)
+    }
+
+    function div(node) {
+        visit(node.elts[1])
+        visit(node.elts[0])
+        ast.div(ctx)
+    }
+
+    function mul(node) {
+        visit(node.elts[1])
+        visit(node.elts[0])
+        ast.mul(ctx)
+    }
+
+    function add(node) {
+        visit(node.elts[1])
+        visit(node.elts[0])
+        ast.add(ctx)
+    }
+
+    function sub(node) {
+        visit(node.elts[1])
+        visit(node.elts[0])
+        ast.sub(ctx)
+    }
+
+    function stroke(node) {
+        ast.name(ctx, "stroke")
+        for (var i = node.elts.length-1; i >= 0; i--) {
+            visit(node.elts[i])
+        }
+        ast.callExpr(ctx, node.elts.length)
+    }
+
+    function strokeWidth(node) {
+        ast.name(ctx, "stroke-width")
+        for (var i = node.elts.length-1; i >= 0; i--) {
+            visit(node.elts[i])
+        }
+        ast.callExpr(ctx, node.elts.length)
+    }
+
+    function fill(node) {
+        ast.name(ctx, "fill")
+        for (var i = node.elts.length-1; i >= 0; i--) {
+            visit(node.elts[i])
+        }
+        ast.callExpr(ctx, node.elts.length)
+    }
+
+    function ident(node) {
+        print("ident()")
+        var name = node.elts[0]
+        var word = env.findWord(ctx, name)
+        if (word) {
+            ast.push(ctx, word.val)
+        }
+    }
+
+    function num(node) {
+        ast.number(ctx, node.elts[0])
+    }
+
+    function str(node) {
+        ast.string(ctx, node.elts[0])
+    }
+
+
+    function letExpr(node) {
+        print("letExpr")
+        var startCol = col
+        var startLn = ln
+        var elts = [ ]
+        elts.push(visit(node.head))
+        ln += 1
+        col = indent()
+        elts.push(visit(node.expr))
+        ln += 1
+        col = indent()
+        return {
+            "tag": "tspan",
+            "class": "LetExpr",
+            "id": node.id,
+            "startCol": startCol,
+            "startLn": startLn,
+            "stopCol": col,
+            "stopLn": ln,
+            "elts": elts
+        } 
+    }
+
+     function stub(node) {
+        print("stub: " + node.tag)
+        return ""
+     }
+}()

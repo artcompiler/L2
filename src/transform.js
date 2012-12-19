@@ -3,8 +3,9 @@
 
 var _ = require("underscore")
 
-if (GraffitiCode===void 0) {
-    var GraffitiCode = {}
+if (!this.GraffitiCode) {
+    this.GraffitiCode = GraffitiCode = {}
+    console.log("transform making GraffitiCode")
 }
 
 exports.transformer = GraffitiCode.transformer = function() {
@@ -50,7 +51,6 @@ exports.transformer = GraffitiCode.transformer = function() {
         "LiteralInt" : literalInt,
         "LiteralUInt" : stub,
         "LiteralBoolean" : literalBoolean,
-        "LiteralString" : literalString,
         "LiteralArray" : literalArray,
         "LiteralComprehension" : arrayComprehension,
         "LiteralObject" : literalObject,
@@ -97,12 +97,51 @@ exports.transformer = GraffitiCode.transformer = function() {
         "CALL" : callExpr,
         "IDENT" : ident,
         "NUM" : num,
+        "STR" : str,
+        "GRID" : grid,
         "TRI" : triangle,
+        "TRISIDE" : triside,
+        "RECT" : rectangle,
+        "ELLIPSE" : ellipse,
+        "BEZIER" : bezier,
+        "LINE" : line,
+        "POINT" : point,
+
+        "PATH" : path,
+        "CLOSEPATH" : closepath,
+        "MOVETO" : moveto,
+        "LINETO" : lineto,
+        "CURVETO" : curveto,
+
+        "TEXT" : text,
+        "FSIZE" : fsize,
+        "ROTATE" : rotate,
+        "SCALE" : scale,
+        "TRANSLATE" : translate,
+        "SKEWX" : skewX,
+        "SKEWY" : skewY,
+        "RGB" : rgb,
+        "RGBA" : rgba,
+        "FILL" : fill,
+        "STROKE" : stroke,
+        "STROKEWIDTH" : strokeWidth,
+        "COLOR" : color,
+        "SIZE" : size,
+        "BACKGROUND" : background,
     }
 
     // CONTROL FLOW ENDS HERE
 
+    var canvasWidth = 0
+    var canvasHeight = 0
+    var canvasColor = ""
+
     exports.transform = transform
+    exports.canvasWidth = function() {return canvasWidth}
+    exports.canvasHeight =  function() {return canvasHeight}
+    exports.canvasColor =  function() { 
+        return canvasColor
+    }
 
     return {
         transform: transform,
@@ -149,7 +188,6 @@ exports.transformer = GraffitiCode.transformer = function() {
     }
 
     function isString(v) {
-        console.log("isString() _="+_)
         return _.isString(v)
     }
 
@@ -168,25 +206,27 @@ exports.transformer = GraffitiCode.transformer = function() {
     var edgesNode
 
     function program(node) {
-        print("program()")
+        print("program() nodePool="+JSON.stringify(nodePool))
+        canvasSize(640, 360) // default size
+        canvasColor = "255" // default color
         var elts = [ ]
         elts.push(visit(node.elts[0]))
         return {
             "tag": "g",
-            "class": "program",
+//            "class": "program",
             "elts": elts
         }
     }
 
     function exprs(node) {
-        print("exprs()")
+        print("exprs() node="+JSON.stringify(node))
         var elts = []
         for (var i = 0; i < node.elts.length; i++) {
             elts.push(visit(node.elts[i]))
         }
         return {
             tag: "g",
-            class: "exprs",
+//            class: "exprs",
             elts: elts
         }
     }
@@ -203,24 +243,449 @@ exports.transformer = GraffitiCode.transformer = function() {
             "elts": elts
         }
     }
+    
+    function canvasSize(width, height) {
+        canvasWidth = width
+        canvasHeight = height
+    }
 
     function triangle(node) {
         print("triangle")
-//        var name = visit(node.elts.pop())
         var elts = []
-        var x0 = visit(node.elts.pop())
-        var y0 = visit(node.elts.pop())
-        var x1 = visit(node.elts.pop())
-        var y1 = visit(node.elts.pop())
-        var x2 = visit(node.elts.pop())
-        var y2 = visit(node.elts.pop())
+        var x0 = visit(node.elts[5])
+        var y0 = visit(node.elts[4])
+        var x1 = visit(node.elts[3])
+        var y1 = visit(node.elts[2])
+        var x2 = visit(node.elts[1])
+        var y2 = visit(node.elts[0])
+        var d = x0 + " " + y0 + " " +
+                x1 + " " + y1 + " " +
+                x2 + " " + y2
+        return {
+            "tag": "polygon",
+            "points": d
+        }
+    }
+
+    function grid(node) {
+        print("grid")
+        var elts = []
+        var w = +visit(node.elts[3])
+        var h = +visit(node.elts[2])
+        var sw = +visit(node.elts[1])
+        var sh = +visit(node.elts[0])
+
+        for (var x = w; w > 0 && x < sw; x+=w) {
+            elts.push({tag: "line", x1: x, y1: 0, x2: x, y2: sh})
+        }
+
+        for (var y = h; h > 0 && y < sh; y+=h) {
+            elts.push({tag: "line", x1: 0, y1: y, x2: sw, y2: y})
+        }
+        
+        var n = {
+            "tag": "g",
+            "elts": elts,
+        }
+        return n
+    }
+
+    function rectangle(node) {
+        print("rectangle")
+        var elts = []
+        var w = visit(node.elts[1])
+        var h = visit(node.elts[0])
+
+        return {
+            "tag": "rect",
+            "x": "0",
+            "y": "0",
+            "width": w,
+            "height": h,
+        }
+    }
+
+    function ellipse(node) {
+        print("ellipse")
+        var elts = []
+        var w = visit(node.elts[1])
+        var h = visit(node.elts[0])
+
+        return {
+            "tag": "ellipse",
+            "rx": w/2,
+            "ry": h/2,
+        }
+    }
+
+    function bezier(node) {
+        print("bezier")
+        var elts = []
+        var x0 = visit(node.elts[7])
+        var y0 = visit(node.elts[6])
+        var x1 = visit(node.elts[5])
+        var y1 = visit(node.elts[4])
+        var x2 = visit(node.elts[3])
+        var y2 = visit(node.elts[2])
+        var x3 = visit(node.elts[1])
+        var y3 = visit(node.elts[0])
         var d = "M " + x0 + " " + y0 + 
-                " L " + x1 + " " + y1 +
-                " L " + x2 + " " + y2 +
-                " L " + x0 + " " + y0
+                " C " + x1 + " " + y1 + " " +
+                        x2 + " " + y2 + " " +
+                        x3 + " " + y3
         return {
             "tag": "path",
             "d": d
+        }
+    }
+
+    function line(node) {
+        print("line")
+        var x = visit(node.elts[1])
+        var y = visit(node.elts[0])
+        return {
+            "tag": "line",
+            "x1": 0,
+            "y1": 0,
+            "x2": x,
+            "y2": y,
+        }
+    }
+
+    function point(node) {
+        print("point")
+        return {
+            "tag": "ellipse",
+            "rx": 1/2,
+            "ry": 1/2,
+        }
+    }
+
+    function path(node) {
+        print("path")
+        var elts = []
+        var d = visit(node.elts[0])
+        return {
+            "tag": "path",
+            "d": d
+        }
+    }
+
+    function moveto(node) {
+        print("moveto")
+        var x = visit(node.elts[2])
+        var y = visit(node.elts[1])
+        var d = visit(node.elts[0])
+        return "M "+x+" "+y+" "+d
+    }
+
+    function lineto(node) {
+        print("lineto")
+        var x = visit(node.elts[2])
+        var y = visit(node.elts[1])
+        var d = visit(node.elts[0])
+        return "L "+x+" "+y+" "+d
+    }
+
+    function curveto(node) {
+        print("curveto")
+        var x1 = visit(node.elts[6])
+        var y1 = visit(node.elts[5])
+        var x2 = visit(node.elts[4])
+        var y2 = visit(node.elts[3])
+        var x = visit(node.elts[2])
+        var y = visit(node.elts[1])
+        var d = visit(node.elts[0])
+        return "C "+x1+" "+y1+" "+x2+" "+y2+" "+x+" "+y+" "+d
+    }
+
+    function closepath(node) {
+        print("closepath")
+        return "Z"
+    }
+
+    function text(node) {
+        print("text")
+        var elts = []
+        var str = ""+visit(node.elts[0])
+        elts.push(str)
+        return {
+            "tag": "text",
+            "elts": elts,
+        }
+    }
+
+    function fsize(node) {
+        print("fsize")
+        var elts = []
+        var size = visit(node.elts[1])
+        elts.push(visit(node.elts[0]))
+        return {
+            "tag": "g",
+            "font-size": size,
+            "elts": elts,
+        }
+    }
+
+    function triside(node) {
+        print("triangle")
+        var elts = []
+        var l2 = visit(node.elts[2])
+        var l1 = visit(node.elts[1])
+        var l0 = visit(node.elts[0])
+
+        var cos0 = (l1*l1 + l2*l2 - l0*l0) / (2*l1*l2)
+        var sin0 = Math.sqrt(1 - cos0*cos0)
+
+        var cos1 = (l2*l2 + l0*l0 - l1*l1) / (2*l2*l0)
+        var sin1 = Math.sqrt(1 - cos1*cos1)
+
+        var cos2 = (l0*l0 + l1*l1 - l2*l2) / (2*l0*l1)
+        var sin2 = Math.sqrt(1 - cos2*cos2)
+
+        var x0 = 0
+        var y0 = 0
+        var x1 = x0 + l1*cos1
+        var y1 = y0 + l1*sin1
+        var x2 = x1 + l2*cos2
+        var y2 = y1 - l2*sin2
+
+        var d = x0 + " " + y0 + " " +
+                x1 + " " + y1 + " " +
+                x2 + " " + y2
+        return {
+            "tag": "polygon",
+            "points": d
+        }
+    }
+
+    function rotate(node) {
+        print("rotate")
+        var elts = []
+        var angle = visit(node.elts[1])
+        var shape = visit(node.elts[0])
+        return {
+            "tag": "g",
+            "transform": "rotate("+angle+")",
+            "elts": [shape],
+        }
+    }
+
+    function translate(node) {
+        print("translate")
+        var elts = []
+        var x = +visit(node.elts[2])
+        var y = +visit(node.elts[1])
+        var shape = visit(node.elts[0])
+        return {
+            "tag": "g",
+            "transform": "translate("+x+", "+y+")",
+            "elts": [shape],
+        }
+    }
+
+    function scale(node) {
+        print("scale")
+        var elts = []
+        var factor = visit(node.elts[1])
+        var shape = visit(node.elts[0])
+        return {
+            "tag": "g",
+            "transform": "scale("+factor+")",
+            "elts": [shape],
+        }
+    }
+
+    function skewX(node) {
+        print("skewX")
+        var elts = []
+        var angle = visit(node.elts[1])
+        var shape = visit(node.elts[0])
+        return {
+            "tag": "g",
+            "transform": "skewX("+angle+")",
+            "elts": [shape],
+        }
+    }
+
+    function skewY(node) {
+        print("skewY")
+        var elts = []
+        var angle = visit(node.elts[1])
+        var shape = visit(node.elts[0])
+        return {
+            "tag": "g",
+            "transform": "skewY("+angle+")",
+            "elts": [shape],
+        }
+    }
+
+    function rgb(node) {
+        print("rgb")
+        var elts = []
+        var r = visit(node.elts[2])
+        var g = visit(node.elts[1])
+        var b = visit(node.elts[0])
+        return {
+            r: r,
+            g: g,
+            b: b,
+        }
+    }
+
+    function rgba(node) {
+        print("rgb")
+        var elts = []
+        var r = visit(node.elts[3])
+        var g = visit(node.elts[2])
+        var b = visit(node.elts[1])
+        var a = visit(node.elts[0])/100
+        return {
+            r: r,
+            g: g,
+            b: b,
+            a: a,
+        }
+    }
+
+    function color(node) {
+        print("color")
+        var elts = []
+        var rgb = visit(node.elts[1])
+        var shape = visit(node.elts[0])
+
+        if (rgb.r === void 0) {
+            var val = rgb
+            rgb = {}
+            rgb.r = rgb.g = rgb.b = val;
+        }
+
+        var r = rgb.r
+        var g = rgb.g
+        var b = rgb.b
+        var a = rgb.a
+        if (a !== void 0) {
+            return {
+                "tag": "g",
+                "stroke": "rgba("+r+", "+g+", "+b+", "+a+")",
+                "fill": "rgba("+r+", "+g+", "+b+", "+a+")",
+                "elts": [shape],
+            }
+        }
+        
+        return {
+            "tag": "g",
+            "stroke": "rgb("+r+", "+g+", "+b+")",
+            "fill": "rgb("+r+", "+g+", "+b+")",
+            "elts": [shape],
+        }
+    }
+
+    function size(node) {
+        print("size")
+        var elts = []
+        var width = visit(node.elts[1])
+        var height = visit(node.elts[0])
+        canvasSize(width, height)
+        return void 0
+    }
+
+    function background(node) {
+        var elts = []
+        var rgb = visit(node.elts[0])
+
+        // if it is a scalar, compute grey value
+        if (rgb.r === void 0) {
+            var val = rgb
+            rgb = {}
+            rgb.r = rgb.g = rgb.b = val;
+        }
+
+        var r = rgb.r
+        var g = rgb.g
+        var b = rgb.b
+        var a = rgb.a
+        if (a !== void 0) {
+            canvasColor = "rgba("+r+", "+g+", "+b+", "+a+")"
+        }
+        else {
+            canvasColor = "rgb("+r+", "+g+", "+b+")"
+        }
+        return void 0
+    }
+
+    function stroke(node) {
+        print("stroke")
+        var elts = []
+        var rgb = visit(node.elts[1])
+        var shape = visit(node.elts[0])
+
+        if (rgb.r === void 0) {
+            var val = rgb
+            rgb = {}
+            rgb.r = rgb.g = rgb.b = val;
+        }
+
+        var r = rgb.r
+        var g = rgb.g
+        var b = rgb.b
+        var a = rgb.a
+        if (a !== void 0) {
+            return {
+                "tag": "g",
+                "stroke": "rgba("+r+", "+g+", "+b+", "+a+")",
+                "elts": [shape],
+            }
+        }
+
+        return {
+            "tag": "g",
+            "stroke": "rgb("+r+", "+g+", "+b+")",
+            "elts": [shape],
+        }
+    }
+
+    function strokeWidth(node) {
+        print("strokeWidth")
+        var elts = []
+        var width = visit(node.elts[1])
+        var shape = visit(node.elts[0])
+
+        return {
+            "tag": "g",
+            "stroke-width": width,
+            "elts": [shape],
+        }
+    }
+
+    function fill(node) {
+        print("color")
+        var elts = []
+        var rgb = visit(node.elts[1])
+        var shape = visit(node.elts[0])
+
+        if (rgb.r === void 0) {
+            var val = rgb
+            rgb = {}
+            rgb.r = rgb.g = rgb.b = val;
+        }
+
+        var r = rgb.r
+        var g = rgb.g
+        var b = rgb.b
+        var a = rgb.a
+        if (a !== void 0) {
+            return {
+                "tag": "g",
+                "fill": "rgba("+r+", "+g+", "+b+", "+a+")",
+                "elts": [shape],
+            }
+        }
+
+        return {
+            "tag": "g",
+            "fill": "rgb("+r+", "+g+", "+b+")",
+            "elts": [shape],
         }
     }
 
@@ -234,28 +699,9 @@ exports.transformer = GraffitiCode.transformer = function() {
         return node.elts[0]
     }
 
-    function literalString(node) {
-        print("literalString")
-        var startCol = col
-        var startLn = ln
-        var elts = []
-        if (node.strValue.charAt(0) === "'") {
-            elts.push('"'+node.strValue+'"')
-        }
-        else {
-            elts.push("'"+node.strValue+"'")
-        }
-        var n = {
-            "tag": "tspan",
-            "class": "LiteralString",
-            "id": node.id,
-            "startCol": col,
-            "startLn": ln,
-            "stopCol": (col += (node.strValue + "  ").length),
-            "stopLn": ln,
-            "elts": elts
-        }
-        return n        
+    function str(node) {
+        print("str()")
+        return node.elts[0]
     }
 
 
@@ -277,7 +723,7 @@ exports.transformer = GraffitiCode.transformer = function() {
             "stopCol": col,
             "stopLn": ln,
             "elts": elts
-        } 
+        }
     }
 
     function returnStmt(node) {
