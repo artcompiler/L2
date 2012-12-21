@@ -35,7 +35,16 @@ process.argv.forEach(function (val, index, array) {
 	if (err) {
 	    return console.log(err);
 	}
-	console.log(data);
+	var t0 = new Date;
 	parse(data);
+	var t1 = new Date;
+	console.log("total: " + (t1-t0) + "ms")
+	console.log("scan count: " + parser.scanCount())
+	console.log("scan time: " + parser.scanTime() + "ms")
+	console.log("fold time: " + parser.foldTime() + "ms")
+	console.log("parse count: " + parser.parseCount())
+	console.log("parse time: " + parser.parseTime() + "ms")
+	//transform();
+	//render();
     });
 });

@@ -3,25 +3,23 @@
 
 /* copyright (c) 2012, Jeff Dyer */
 
-var env = exports.env = { }
-
 function alert(str) {
 //    throw str
 }
 
 function print(str) {
-    console.log(str)
+    //console.log(str)
 }
 
 function log(str) {
-    console.log(str)
+    //console.log(str)
 }
 
 var _ = require('./underscore')
 
 // ast module
 
-var ast = exports.ast = (function () {
+var ast = (function () {
 
     var ASSERT = true
 
@@ -95,7 +93,6 @@ var ast = exports.ast = (function () {
 
     function pop(ctx) {
         var nodeStack = ctx.state.nodeStack
-//        print("nodeStack="+nodeStack)
         return nodeStack.pop()
     }
 
@@ -127,20 +124,15 @@ var ast = exports.ast = (function () {
             nid = nodePool.length - 1
             nodeMap[key] = nid
         }
-//        print("intern() key="+key+" nid="+nid)
-//        print("intern() pool="+dumpAll(ctx))
-            return nid
+        return nid
     }
 
     function node(ctx, nid) {
-//        print("node() nid="+nid)
         var ret = { elts: [] }
-        //print("node() pool="+dumpAll(ctx))
         var n = ctx.state.nodePool[nid]
         if (!n) {
             return {}
         }
-        // if literal, then unwrap.
         switch (n.tag) {
         case "NUM":
         case "STR":
@@ -269,13 +261,11 @@ var ast = exports.ast = (function () {
             word.val = args[args.length-1-word.offset]  // offsets are from end of args
             env.addWord(ctx, id, word)
         }
+        // in line function body at call site
         folder.fold(ctx, def.nid)
         env.exitEnv(ctx)
     }
 
-    // FIXME
-    // -- setup lexical environment
-    // -- interpreted body
     function callExpr(ctx, argc) {
         log("ast.callExpr() argc="+argc)
         var elts = []
@@ -288,10 +278,13 @@ var ast = exports.ast = (function () {
             return
         }
         var name = e[0]   // assumes node is a primitive
-//        print("callExpr() name="+name+" elts="+elts)
         var def = env.findWord(ctx, name)
-        if (!def) return
+        if (!def) {
+            assert(false)
+            return
+        }
         if (def.nid) {
+            // we have a user def, so fold it.
             return fold(ctx, def, elts)
         }
         else {
@@ -375,7 +368,7 @@ var ast = exports.ast = (function () {
     }
 
     function exprs(ctx, n) {
-//        print("ast.exprs() n="+n)
+        log("ast.exprs() n="+n)
         var elts = []
         for (var i = n; i > 0; i--) {
             var elt = pop(ctx)
@@ -387,6 +380,7 @@ var ast = exports.ast = (function () {
     }
 
     function letDefn(ctx) {
+        log("ast.letDefn()")
         pop(ctx)  // name
         pop(ctx)  // body
         for (var i = 0; i < ctx.state.paramc; i++) {
@@ -402,16 +396,16 @@ var ast = exports.ast = (function () {
 
 })();
 
-(function () {
-    
+// The following code for StreamString was copied from CodeMirror.
+
+exports.StringStream = (function () {
+
     // The character stream used by a mode's parser.
     function StringStream(string, tabSize) {
         this.pos = this.start = 0;
         this.string = string;
         this.tabSize = tabSize || 8;
     }
-
-    exports.StringStream = StringStream
 
     StringStream.prototype = {
         eol: function() {return this.pos >= this.string.length;},
@@ -462,14 +456,78 @@ var ast = exports.ast = (function () {
         current: function(){return this.string.slice(this.start, this.pos);}
     }
 
+    return StringStream
+
+})()
+
+// env
+
+var env = (function () {
+
+    return {
+        findWord: findWord,
+        addWord: addWord,
+        enterEnv: enterEnv,
+        exitEnv: exitEnv,
+    }
+
+    // private functions
+
+    function findWord(ctx, lexeme) {
+        var env = ctx.state.env
+        print("findWord() lexeme=" + JSON.stringify(lexeme))
+        for (var i = env.length-1; i >= 0; i--) {
+            var word = env[i].lexicon[lexeme]
+            if (word) {
+                return word
+            }
+        }
+        return null
+    }
+
+    function addWord(ctx, lexeme, entry) {
+        print("addWord() lexeme=" + lexeme)
+        topEnv(ctx).lexicon[lexeme] = entry
+        return null
+    }
+
+    function enterEnv(ctx, name) {
+        ctx.state.env.push({name: name, lexicon: {}})
+    }
+
+    function exitEnv(ctx) {
+        ctx.state.env.pop()
+    }
+
 })();
+
+var scanTime = 0
+var scanCount = 0
+exports.scanTime = function () {
+    return scanTime
+};
+exports.scanCount = function () {
+    return scanCount
+};
+
+
+var parseTime = 0
+
+exports.parseTime = function () {
+    return parseTime
+};
+
+var parseCount = 0
+exports.parseCount = function () {
+    return parseCount
+};
+
 
 // parser
 (function () {
 
     var lexicon = require('./draw-lexicon')
     var globalLexicon = lexicon.global
-
     
     function assert(b, str) {
         if (!b) {
@@ -511,40 +569,6 @@ var ast = exports.ast = (function () {
     var TK_BACKQUOTE    = 0xAC
     var TK_COMMENT      = 0xAD
 
-    function findWord(ctx, lexeme) {
-        var env = ctx.state.env
-        print("findWord() lexeme=" + JSON.stringify(lexeme))
-        for (var i = env.length-1; i >= 0; i--) {
-            var word = env[i].lexicon[lexeme]
-            if (word) {
-                return word
-            }
-        }
-        return null
-    }
-
-    env.findWord = findWord
-
-    function addWord(ctx, lexeme, entry) {
-//        print("addWord() lexeme=" + lexeme)
-        topEnv(ctx).lexicon[lexeme] = entry
-        return null
-    }
-
-    env.addWord = addWord
-
-    function enterEnv(ctx, name) {
-        ctx.state.env.push({name: name, lexicon: {}})
-    }
-
-    env.enterEnv = enterEnv
-
-    function exitEnv(ctx) {
-        ctx.state.env.pop()
-    }
-
-    env.exitEnv = exitEnv
-
     function eat(ctx, tk) {
         log("eat() tk="+tk)
         if (next(ctx) !== tk) {
@@ -557,21 +581,15 @@ var ast = exports.ast = (function () {
             return true
         }
         else {
-//            ctx.scan.stream.backUp(lexeme.length)
             return false
         }
     }
-
-//    function next(ctx) {
-//        var tk = ctx.scan.start()
-//        log("next() tk="+tk+" lexeme="+lexeme)
-//        return tk
-//    }
 
     function next(ctx) {
         var tk = peek(ctx)
         ctx.state.nextToken = -1
         print("next() tk="+tk+" lexeme="+lexeme)
+        scanCount++
         return tk
     }
 
@@ -579,7 +597,10 @@ var ast = exports.ast = (function () {
         var tk
         var nextToken = ctx.state.nextToken
         if (nextToken < 0) {
+            var t0 = new Date()
             tk = ctx.scan.start()
+            var t1 = new Date()
+            scanTime += (t1-t0)
             ctx.state.nextToken = tk
         }
         else {
@@ -618,7 +639,7 @@ var ast = exports.ast = (function () {
         log("name()")
         eat(ctx, TK_IDENT)
         ast.name(ctx, lexeme)
-        var word = findWord(ctx, lexeme)
+        var word = env.findWord(ctx, lexeme)
         if (word) {
             cc.cls = word.cls
         }
@@ -712,9 +733,7 @@ var ast = exports.ast = (function () {
             return string(ctx, cc)
         }
         else if (match(ctx, TK_LEFTBRACE)) {
-            var ret = map(ctx, cc)
-            log("map() ret=" + ret)
-            return ret
+            return map(ctx, cc)
         }
         else if (match(ctx, TK_LEFTPAREN)) {
             return tuple(ctx, cc)
@@ -729,7 +748,7 @@ var ast = exports.ast = (function () {
         log("callExpr()")
         return primaryExpr(ctx, function (ctx) {
             var name = ast.node(ctx, ast.topNode(ctx)).elts[0]
-            var tk = findWord(ctx, name)
+            var tk = env.findWord(ctx, name)
             log("found primaryExpr tk="+tk+" topNode="+ast.node(ctx, ast.topNode(ctx)).elts[0])
             if (tk && tk.cls === "method") {
                 startArgs(ctx, tk.length)
@@ -762,7 +781,7 @@ var ast = exports.ast = (function () {
         if (ctx.state.argc === 0) {
             ast.callExpr(ctx, ctx.state.paramc)
             finishArgs(ctx)
-            return cc
+            return cc(ctx)
         }
         return arg(ctx, function (ctx) {
             return args(ctx, cc)
@@ -793,7 +812,7 @@ var ast = exports.ast = (function () {
                     return cc
                 })                
             }
-            ret.cls = "number"
+            ret.cls = "number"   // use number because of convention
             return ret
         }
         return postfixExpr(ctx, cc)
@@ -801,7 +820,7 @@ var ast = exports.ast = (function () {
     
     function binaryExpr(ctx, cc) {
         log("binaryExpr()")
-        var ret = prefixExpr(ctx, function (ctx) {
+        return prefixExpr(ctx, function (ctx) {
             if (match(ctx, TK_BINOP)) {
                 eat(ctx, TK_BINOP)
                 var op = findWord(ctx, lexeme).name
@@ -815,42 +834,16 @@ var ast = exports.ast = (function () {
             }
             return cc(ctx)
         })
-        log("prefixExpr() ret="+ret)
-        return ret
     }
     
-    function isExpr(ctx, cc) {
-        log("isExpr()")
-        var ret = binaryExpr(ctx, function (ctx) {
-            if (match(ctx, TK_IS)) {
-                eat(ctx, TK_IS)
-                var tk = findWord(ctx, lexeme)
-                if (tk && tk.cls === "operator") {
-                    startArgs(ctx, tk.length)
-                    if (ctx.state.argc === 0) {
-                        finishArgs(ctx)
-                        return cc
-                    }
-                    return arg(ctx, function (ctx) {
-                        return args(ctx, function (ctx) {
-                            return isExpr(ctx, cc)
-                        })
-                    })
-                }
-                return cc
-            }
+    function relationalExpr(ctx, cc) {
+        log("relationalExpr()")
+        return binaryExpr(ctx, function (ctx) {
+            // FIXME implement relational expressions
             return cc(ctx)
         })
-        log("binaryExpr() ret="+ret)
-        return ret
     }
 
-    function virtualDot(ctx) {
-        if (match(ctx, TK_DOT)) {
-            eat(ctx, TK_DOT)
-        }
-    }
-    
     function condExpr(ctx, cc) {
         log("condExpr()")
         if (match(ctx, TK_IF)) {
@@ -859,9 +852,7 @@ var ast = exports.ast = (function () {
         else if (match(ctx, TK_MATCH)) {
             return matchExpr(ctx, cc)
         }
-        var ret = isExpr(ctx, cc)
-        log("isExpr() ret="+ret)
-        return ret
+        return relationalExpr(ctx, cc)
     }
 
     function ifExpr(ctx, cc) {
@@ -915,10 +906,12 @@ var ast = exports.ast = (function () {
     function matchClause (ctx, cc) {
         return pattern(ctx, function (ctx) {
             eat(ctx, TK_EQUAL)
-            return exprsStart(ctx, function(ctx) {
+            var ret = exprsStart(ctx, function(ctx) {
                 ast.matchClause(ctx)
                 return cc
             })
+            ret.cls = "keyword"
+            return ret
         })
     }
 
@@ -979,18 +972,15 @@ var ast = exports.ast = (function () {
     }
 
     function countCounter(ctx) {
-//        print("* * * * countCounter() exprc="+(ctx.state.exprc+1))
         ctx.state.exprc++
     }
 
     function startCounter(ctx) {
-        log("* * * * startCounter()")
         ctx.state.exprcStack.push(ctx.state.exprc)
         ctx.state.exprc = 0
     }
 
     function stopCounter(ctx) {
-        log("* * * * stopCounter() exprc="+ctx.state.exprc)
         ctx.state.exprc = ctx.state.exprcStack.pop()
     }
 
@@ -1018,7 +1008,6 @@ var ast = exports.ast = (function () {
             return ret
         }
 
-//        var ret = expr(ctx, function (ctx) {
         return expr(ctx, function (ctx) {
             countCounter(ctx)
             if (match(ctx, TK_DOT)) {
@@ -1034,7 +1023,6 @@ var ast = exports.ast = (function () {
             }
             return exprsFinish(ctx, cc)
         })
-//        return ret
     }
 
     function program(ctx, cc) {
@@ -1042,16 +1030,6 @@ var ast = exports.ast = (function () {
         return exprsStart(ctx, function (ctx) {
             folder.fold(ctx, ast.pop(ctx))  // fold the exprs on top
             ast.program(ctx)
-            return cc
-        })
-    }
-
-    function defs(ctx, cc) {
-        log("defs()")
-        return def(ctx, function (ctx) {
-            if (!emptyInput(ctx)) {
-                return defs(ctx, cc)
-            }
             return cc
         })
     }
@@ -1123,7 +1101,6 @@ var ast = exports.ast = (function () {
     }
 
     var lastAST
-
     function parse(stream, state, doRecompile) {
         var ctx = {scan: scanner(stream), state: state}
         var cls
@@ -1143,6 +1120,7 @@ var ast = exports.ast = (function () {
                 next(ctx)
                 return "comment"
             }
+            var t0 = new Date;
             var cc = state.cc = state.cc(ctx, null)
             if (cc) {
                 cls = cc.cls
@@ -1181,10 +1159,8 @@ var ast = exports.ast = (function () {
             }
             else
             if (x === "comment") {
-//                print("comment found")
+                print("comment found")
                 cls = x
-//                next(ctx)
-                //state.cc = null
             }
             else {
                 alert(x)
@@ -1194,6 +1170,9 @@ var ast = exports.ast = (function () {
                 
             }
         }
+        var t1 = new Date;
+        parseCount++
+        parseTime += t1 - t0
 
         return cls
     }
@@ -1371,7 +1350,6 @@ var ast = exports.ast = (function () {
         }
     }
 
-    print("globalLexicon="+JSON.stringify(globalLexicon))
     var parser = {
         token: function(stream, state) {
             return parse(stream, state)
@@ -1402,12 +1380,13 @@ var ast = exports.ast = (function () {
 
 })(); // end parser
 
-var folder = exports.folder = function() {
+var foldTime = 0
 
+exports.foldTime = function () {
+    return foldTime
+}
 
-    function print(str) {
-//        console.log(str)
-    }
+var folder = function() {
 
     var table = {
         "PROG" : program,
@@ -1469,7 +1448,10 @@ var folder = exports.folder = function() {
     function fold(cx, nid) {
         ctx = cx
         nodePool = ctx.state.nodePool
+        var t0 = new Date
         visit(nid)
+        var t1 = new Date
+        foldTime += (t1-t0)
     }
 
     function visit(nid) {
@@ -1818,29 +1800,6 @@ var folder = exports.folder = function() {
         ast.string(ctx, node.elts[0])
     }
 
-
-    function letExpr(node) {
-        print("letExpr")
-        var startCol = col
-        var startLn = ln
-        var elts = [ ]
-        elts.push(visit(node.head))
-        ln += 1
-        col = indent()
-        elts.push(visit(node.expr))
-        ln += 1
-        col = indent()
-        return {
-            "tag": "tspan",
-            "class": "LetExpr",
-            "id": node.id,
-            "startCol": startCol,
-            "startLn": startLn,
-            "stopCol": col,
-            "stopLn": ln,
-            "elts": elts
-        } 
-    }
 
      function stub(node) {
         print("stub: " + node.tag)
