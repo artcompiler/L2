@@ -8,7 +8,7 @@ if (!this.GraffitiCode) {
 
 var transformer = require('./transform.js')
 
-exports = function() {
+exports.renderer = function() {
 
     exports.render = render
 

@@ -5,10 +5,9 @@ var _ = require('./underscore'),
     renderer = require('./render')
 
 var nodePool
+var nodeStack
 
 var parse = function(src) {
-    console.log("GraffitiCode="+GraffitiCode)
-    console.log("StringStream="+GraffitiCode.StringStream)
     var stream = new parser.StringStream(src)
     var state = parser.startState()
     var next = function () {
@@ -17,13 +16,20 @@ var parse = function(src) {
     while (state.cc != null) {
 	next()
 	nodePool = state.nodePool
+	nodeStack = state.nodeStack
     }
     console.log(nodePool)
+    console.log(state.nodeStack)
 }
 
 var transform = function(nid) {
-    var transformer = GraffitiCode.transformer
-    return JSON.stringify(transformer(require("underscore"), nodePool).transform(nid))
+    var transformer = require("./transform")
+    return transformer.transform(nid)
+}
+
+var render = function(node) {
+    var renderer = require("./render")
+    return renderer.render(node)
 }
 
 process.argv.forEach(function (val, index, array) {
@@ -37,14 +43,18 @@ process.argv.forEach(function (val, index, array) {
 	}
 	var t0 = new Date;
 	parse(data);
+        nodePool.root = (nodePool.length-1)
 	var t1 = new Date;
+	console.log(nodePool)
+	var objAst = transform(nodePool);
+	console.log(JSON.stringify(objAst))
+	var objSrc = render(objAst);
+	console.log(objSrc)
 	console.log("total: " + (t1-t0) + "ms")
 	console.log("scan count: " + parser.scanCount())
 	console.log("scan time: " + parser.scanTime() + "ms")
 	console.log("fold time: " + parser.foldTime() + "ms")
 	console.log("parse count: " + parser.parseCount())
 	console.log("parse time: " + parser.parseTime() + "ms")
-	//transform();
-	//render();
     });
 });
