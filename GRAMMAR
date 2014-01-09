@@ -1,0 +1,103 @@
+program
+    defns
+
+defns
+    defn
+    defns defn
+
+defn
+    'let' ident pattern '=' expr '.' '.'
+    'let' ident '=' expr '.' '.'
+
+pattern
+    value
+    list
+    tuple
+    ident
+    
+expr
+    condExpr
+
+condExpr
+    orExpr
+    'if' expr 'then' expr
+    'if' expr 'then' expr 'else' expr
+    'match' expr 'with' matches
+
+matches
+    match
+    matches match
+
+match
+    pattern '=' expr
+
+orExpr
+    andExpr
+    orExpr 'or' andExpr
+
+andExpr
+    relationalExpr
+    andExpr 'and' isExpr
+
+relationalExpr
+    binaryExpr
+    relationalExpr relationalOp binaryExpr
+
+additiveExpr
+    multiplicativeExpr
+    additiveExpr additiveOp multiplicativeExpr
+
+multiplicativeExpr
+    prefixExpr
+    mutlplicativeExpr multiplicativeOp prefixExpr
+
+prefixExpr
+    prefixOp postfixExpr
+
+postfixExpr
+    callExpr postfixOp
+
+callExpr
+    primaryExpr
+    ident args
+
+primaryExpr
+    num
+    ident
+
+beginExpr
+    'begin' exprs 'end'    (the keywords can be elided when the end of the list is unambiguous)
+
+exprs
+    expr
+    exprs '.' expr
+
+relationalOp
+    'equal'
+    'less than'
+    'greater than'
+    'less than or equal'
+    'greater than or equal'
+    '='
+    '<'
+    '>'
+    '<='
+    '>='
+
+additiveOp
+    'plus'
+    'minus'
+    '+'
+    '-'
+
+multiplicativeOp
+    'times'
+    'divide'
+    'modulo'
+    'mul'
+    'div'
+    'mod'
+    '*'
+    '/'
+    '%'
+
